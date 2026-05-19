@@ -1,0 +1,9 @@
+# pixi environments
+.pixi/*
+!.pixi/config.toml
+pixi.lock*
+vizes
+phoenix
+*_cals
+.vscode
+*.pkl
