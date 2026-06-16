@@ -8,3 +8,4 @@ phoenix
 .vscode
 *.pkl
 *ncu-rep
+.ipynb_checkpoints
