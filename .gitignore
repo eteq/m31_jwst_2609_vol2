@@ -9,3 +9,4 @@ phoenix
 *.pkl
 *ncu-rep
 .ipynb_checkpoints
+*.pyc
