@@ -40,6 +40,7 @@ default = ["cpu"]
 jwst = ">=1.20.2, <2"
 stpsf = ">=2.1.0, <3"
 astroquery = { git = "https://github.com/astropy/astroquery.git" }
+specutils = ">=2.4.0, <3"
 
 [feature.cpu.pypi-dependencies]
 numba = ">=0.65.1,<0.66"
@@ -48,5 +49,5 @@ numba = ">=0.65.1,<0.66"
 jax = { version = ">=0.9.2", extras = ["cuda13"] }
 numba-cuda = { version = ">=0.30.2,<0.31", extras=["cu13"] }
 numba = ">=0.65.1,<0.66"
-#cupy = ">=14.1.0,<15"
 cupy-cuda13x = ">=0.14"
+nirspectroperf = { path = "./nirspectroperf", editable = true }

@@ -11,3 +11,4 @@ phoenix
 .ipynb_checkpoints
 *.pyc
 *.npz
+dist

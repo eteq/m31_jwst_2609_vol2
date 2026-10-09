@@ -1,0 +1,37 @@
+[project]
+name = "nirspectroperf"
+version = "0.0.1"
+authors = [
+  { name="Erik Tollerud", email="erik.tollerud@gmail.com" },
+]
+description = "Spectroperfectionism implemented for the NIRSpec instrument on JWST"
+# readme = "README.md"
+requires-python = ">=3.12"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+# license = "3-clause BSD"
+# license-files = ["LICEN[CS]E*"]
+dependencies = [
+  "numpy",
+  "scipy",
+  "astropy",
+  "numba",
+  "numba-cuda",
+]
+
+[project.urls]
+Homepage = "https://github.com/pypa/sampleproject"
+Issues = "https://github.com/pypa/sampleproject/issues"
+
+[build-system]
+requires = ["flit_core >= 3.12.0, <5"]
+build-backend = "flit_core.buildapi"
+
+[pytest]
+addopts = ["--import-mode=importlib"]
+pythonpath = ["src"]
+markers = [
+    "needs_data",
+]

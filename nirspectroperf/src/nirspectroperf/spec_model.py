@@ -15,7 +15,7 @@ from astropy.io import fits
 from specutils import Spectrum
 from specutils.manipulation import FluxConservingResampler
 
-PHOENIX_MODEL_PATH = Path(os.environ.get('PHOENIX_MODEL_PATH', '../phoenix/fullgrid'))
+PHOENIX_MODEL_PATH = Path(os.environ.get('PHOENIX_MODEL_PATH', '../../../phoenix/fullgrid'))
 
 
 class SpectrumModelBase(ABC):
@@ -76,7 +76,7 @@ class PhoenixModelsDirect(SpectrumModelBase):
 
     @staticmethod
     def _load_model_paths():
-        phoenix_model_paths = [path for path in Path('../phoenix/fullgrid').glob('*.fits') if 'WAVE' not in path.name]
+        phoenix_model_paths = [path for path in PHOENIX_MODEL_PATH.glob('*.fits') if 'WAVE' not in path.name]
         teffgz = [re.match(r'lte(\d*)-(.{4})(.{4}).PHOENIX-ACES.*', fn.name).groups() for fn in phoenix_model_paths]
         dct = {(float(tgz[0]), float(tgz[1]), float(tgz[2])):
                 p for p, tgz in zip(phoenix_model_paths, teffgz)}
