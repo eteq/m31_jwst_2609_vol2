@@ -6,10 +6,12 @@ __all__ = ['NIRSpecSlitModel']
 
 import math
 
+import numpy as np
+
 from astropy import units as u
 from astropy import constants as cnst
 
-from nirspectroperf.spec_model import PhoenixModelsDirect
+from nirspectroperf.spec_model import PhoenixModelsResampled
 from nirspectroperf.psf import NIRSpecPSF
 from nirspectroperf.wcs import WCSW2P
 from nirspectroperf.build2d import scatter_flux
@@ -34,9 +36,12 @@ class NIRSpecSlitModel:
 
 
     @classmethod
-    def make_from_template(cls, observation_template_dm, slit):
+    def make_from_template(cls, observation_template_dm, slit, nspec=4096):
+        allwls = slit.meta.wcs.pixel_to_world(*np.indices(slit.data.shape)[::-1])[1]
+        minwl = np.nanmin(allwls)
+        maxwl = np.nanmax(allwls)
+        spec_model = PhoenixModelsResampled(np.linspace(minwl, maxwl, nspec))
 
-        spec_model = PhoenixModelsDirect()
         psf_model = NIRSpecPSF(observation_template_dm, slit)
         slit_data_template = slit.data
         w2p = WCSW2P(slit.meta.wcs)
@@ -64,11 +69,12 @@ class NIRSpecSlitModel:
             dec = self._dec0_deg + decoff*self._ARCSEC_TO_DEG
             wave = self.spec_model.wave_microns*(1 + v/self._CKMS)
     
-            xslit, yslit = self.w2p.evaluate_wcs_values(ra, dec, wave)
+            xspec, yspec = self.w2p.evaluate_wcs_values(ra, dec, wave)
+            xslit = yslit = 0.5 #TODO: FIX!
     
             psf_flux, psf_x, psf_y = self.psf_model.evaluate_psf(xslit, yslit, spec.spectral_axis.mean())
     
-            return scatter_flux(xslit, yslit, spec.flux.value, 
+            return scatter_flux(xspec, yspec, spec.flux.value, 
                             psf_x, psf_y, psf_flux, 
                             self.psf_model.oversampling, 
                             slit_data_template, 

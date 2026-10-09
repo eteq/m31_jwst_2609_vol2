@@ -23,6 +23,9 @@ class PSFBase(ABC):
 
     @abstractmethod
     def evaluate_psf(self, xslit, yslit, wavelength):
+        """
+        should return psf_x, psf_y, psf_flux where psf_x/y are in native pixel coordinates
+        """
         pass
 
 class NIRSpecPSF(PSFBase):
@@ -76,4 +79,14 @@ class NIRSpecPSF(PSFBase):
                                fov_arcsec=self.fov_arcsec,
                                fov_pixels=self.fov_pixels,
                                display=False)
-        return psffits[whichext].data
+        
+        psf_flux = psffits[whichext].data
+
+        #TODO: fix!
+        psfcen_x = psfcen_y = 0
+
+        ys, xs = np.indices(psf_flux.shape)
+        psf_x = (xs - (xs.shape[1]-1)/2 - psfcen_x)/self.oversampling
+        psf_y = (ys - (ys.shape[0]-1)/2 - psfcen_y)/self.oversampling
+
+        return psf_x, psf_y, psf_flux

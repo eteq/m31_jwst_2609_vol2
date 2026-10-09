@@ -2,7 +2,7 @@
 This module is for generating 1d spectral models. The main goal is to
 do so quickly enough to be part of the inner inference loop.
 """
-__all__ = ['PhoenixModelsDirect']
+__all__ = ['PhoenixModelsDirect', 'PhoenixModelsResampled']
 
 import os
 import re
@@ -45,26 +45,25 @@ class SpectrumModelBase(ABC):
                         flux=raw_spectrum << u.count)
 
     def resample_spectrum_to_wave(self, newsax, teff, log, feh, cache=True):
-        FluxConservingResampler = resampler()
         spectrum = self.make_spectrum(teff, log, feh)
         meandisp = np.mean(np.diff(newsax))  # as a heuristic check for whether newsax is the same
+        resampler = FluxConservingResampler()
         
         if cache:
             if not hasattr(self, '_resample_cache'):
                 self._resample_cache = {}
             key = (teff, log, feh, meandisp)
             if key not in self._resample_cache:
-                self._resample_cache[key] = respec
+                self._resample_cache[key] = resampler(spectrum, newsax)
             return self._resample_cache[key]
-
-        respec = FluxConservingResampler(spectrum, newsax)
-        if cache:
-            self._resample_cache[(teff, log, feh, meandisp)] = respec
-        return respec
+        else:
+            respec = resampler(spectrum, newsax)
+            if cache:
+                self._resample_cache[(teff, log, feh, meandisp)] = respec
+            return respec
 
 
 class PhoenixModelsDirect(SpectrumModelBase):
-    param_names = 'raoff, decoff, z, teff, logg, feh'.split(', ')
     _phoenix_wave_microns = None
     _phoenix_paths_by_tefflgz = None
 
@@ -106,4 +105,27 @@ class PhoenixModelsDirect(SpectrumModelBase):
     def get_available_teff_logg_feh(self):
         return list(PhoenixModelsDirect._phoenix_paths_by_tefflgz.keys())
 
-    
+class PhoenixModelsResampled(SpectrumModelBase):
+    def __init__(self, new_wave, direct_model=None, use_cache=True):
+        super().__init__()
+
+        self.new_wave_microns = new_wave
+
+        if direct_model is None:
+            direct_model = PhoenixModelsDirect()
+        self.direct_model = direct_model
+
+        self.use_cache = use_cache
+
+    @property
+    def wave_microns(self):
+        return self.new_wave_microns
+
+    def get_available_teff_logg_feh(self):
+        return self.direct_model.get_available_teff_logg_feh()
+
+    def make_raw_spectrum(self, teff, logg, feh):
+        return self.make_spectrum(teff, logg, feh).flux.value
+
+    def make_spectrum(self, teff, logg, feh):
+        return self.direct_model.resample_spectrum_to_wave(self.new_wave_microns, teff, logg, feh, self.use_cache)

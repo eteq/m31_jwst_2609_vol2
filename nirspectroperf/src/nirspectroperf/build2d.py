@@ -103,8 +103,8 @@ def compute_influence(xspec, yspec, maxpsf, slittemplate):
     """
     kernelspec_influence = (slittemplate.shape[1], slittemplate.shape[0])
 
-    xspecc = to_cuda_array_if_needed(xspec.astype(np.float32))
-    yspecc = to_cuda_array_if_needed(yspec.astype(np.float32))
+    xspecc = to_cuda_array_if_needed(xspec)
+    yspecc = to_cuda_array_if_needed(yspec)
 
     startidxc = cuda.device_array(slittemplate.shape, dtype=np.int32)
     nspecc = cuda.device_array(slittemplate.shape, dtype=np.int32)
@@ -121,37 +121,40 @@ def to_cuda_array_if_needed(arr, dtype=np.float32):
         return cuda.to_device(arr.astype(dtype))
 
 
-def scatter_flux(xslit, yslit, spectrum_fnu, 
+def scatter_flux(xspec, yspec, spectrum_fnu, 
                  psf_x, psf_y, psf_flux, 
                  oversampling, 
                  slittemplate, 
                  sum_flux=True, 
-                 ret_host_array=False):
+                 ret_host_array=False,
+                 outslitall=None):
     """
     This function takes host-side arrays, and converts them into a form the GPU can use.
     """
     import cupy as cp
-    xslitc = to_cuda_array_if_needed(xslit)
-    yslitc = to_cuda_array_if_needed(yslit)
+    xspecc = to_cuda_array_if_needed(xspec)
+    yspecc = to_cuda_array_if_needed(yspec)
     fluxspecc = to_cuda_array_if_needed(spectrum_fnu)
 
     psf_xc = to_cuda_array_if_needed(psf_x)
     psf_yc = to_cuda_array_if_needed(psf_y)
     psf_fluxc = to_cuda_array_if_needed(psf_flux)
 
-    maxpsf = max(np.max(psf_x), np.max(psf_y)).astype(np.float32).ravel()
-    startidxc, nspecc = compute_influence(xslitc, yslitc, maxpsf)
+    maxpsf = max(np.max(psf_x), np.max(psf_y)).astype(np.float32).ravel()[0]
+    startidxc, nspecc = compute_influence(xspecc, yspecc, maxpsf, slittemplate)
 
     longest_stretch = int(cp.array(nspecc, copy=False).max())
     longest_stretch32 = math.ceil(longest_stretch / 32) * 32   
+    assert longest_stretch32 <= 1024, f'Only 1024 threads per block, but longest stretch is {longest_stretch}'
     kernelspec = (slittemplate.shape[::-1], longest_stretch32)
 
     slitarr = np.zeros_like(slittemplate)
     slitarr[np.isnan(slittemplate)] = np.nan
-    outslitall = cuda.to_device(np.repeat(np.expand_dims(slitarr, axis=-1), kernelspec[-1], axis=-1))
+    if outslitall is None:
+        outslitall = cuda.to_device(np.repeat(np.expand_dims(slitarr, axis=-1), kernelspec[-1], axis=-1).astype(np.float32))
 
 
-    scatter_flux_kernel[kernelspec](xslitc, yslitc, fluxspecc, 
+    scatter_flux_kernel[kernelspec](xspecc, yspecc, fluxspecc, 
                             psf_xc, psf_yc, psf_fluxc,
                             startidxc, nspecc, 
                             outslitall, oversampling)
