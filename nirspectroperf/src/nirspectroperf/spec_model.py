@@ -2,6 +2,8 @@
 This module is for generating 1d spectral models. The main goal is to
 do so quickly enough to be part of the inner inference loop.
 """
+__all__ = ['PhoenixModelsDirect']
+
 import os
 import re
 from pathlib import Path

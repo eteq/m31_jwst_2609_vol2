@@ -4,6 +4,8 @@ spectrograph slits.
 
 Note this may not be necessary for WCSs that are linear with the sky/pixel offsets (like NIRSpec)
 """
+__all__ = ['WCSW2P']
+
 from abc import ABC, abstractmethod
 
 import numpy as np

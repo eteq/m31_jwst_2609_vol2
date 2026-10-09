@@ -5,6 +5,9 @@ do so quickly enough to be part of the inner inference loop.
 Note that one needs to set STPSF_PATH envar before using anything that 
 depends on stpsf
 """
+
+__all__ = ['NIRSpecPSF']
+
 from abc import ABC, abstractmethod
 
 import numpy as np
