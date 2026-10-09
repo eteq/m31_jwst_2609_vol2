@@ -20,4 +20,4 @@ def test_model_spectra():
     assert np.any(np.isnan(modarr))
     assert not np.all(np.isnan(modarr))
 
-    # should also check something about the data itself, TBD
+    # TODO: should also check something about the data itself
