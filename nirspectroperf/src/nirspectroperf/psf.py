@@ -56,9 +56,11 @@ class NIRSpecPSF(PSFBase):
         else:
             self.fov_pixels = fov
 
+        nrs.image_mask = 'Single MSA open shutter'
+
     def evaluate_psf(self, xslit, yslit, wavelength, whichext='OVERDIST'):
         """
-        xslit/yslit can be quantity or fraction of slit width/height
+        xslit/yslit can be quantity or fraction of slit width/height, 0 is centered in the slit
         wavelength must be a quantity
         """
         nrs = self.nirspec_psf

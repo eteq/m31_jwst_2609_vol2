@@ -20,7 +20,7 @@ import numba
 from numba import cuda
 
 class NIRSpecSlitModel:
-    param_names = 'raoff, decoff, v, teff, logg, feh'.split(', ')
+    param_names = 'F0, raoff, decoff, v, teff, logg, feh'.split(', ')
     param_units = [u.arcsec, u.arcsec, u.km/u.s, u.K, u.dimensionless_unscaled, u.dimensionless_unscaled]
 
     def __init__(self, spec_model, psf_model, w2p, slit_data_template, ra0_deg, dec0_deg):
@@ -61,7 +61,7 @@ class NIRSpecSlitModel:
     _ARCSEC_TO_DEG = u.arcsec.to(u.deg)
     _CKMS = cnst.c.to_value(param_units[2])
     def make_model(self, model_params, slit_data_template):
-            raoff, decoff, v, teff, logg, feh = model_params
+            F0, raoff, decoff, v, teff, logg, feh = model_params
     
             spec = self.spec_model.make_spectrum(teff, logg, feh)
             
@@ -70,16 +70,16 @@ class NIRSpecSlitModel:
             wave = self.spec_model.wave_microns*(1 + v/self._CKMS)
     
             xspec, yspec = self.w2p.evaluate_wcs_values(ra, dec, wave)
-            xslit = yslit = 0.5 #TODO: FIX!
+            xslit = yslit = 0.0 #TODO: FIX!
     
-            psf_flux, psf_x, psf_y = self.psf_model.evaluate_psf(xslit, yslit, spec.spectral_axis.mean())
+            psf_y, psf_x, psf_flux = self.psf_model.evaluate_psf(xslit, yslit, spec.spectral_axis.mean())
     
-            return scatter_flux(xspec, yspec, spec.flux.value, 
-                            psf_x, psf_y, psf_flux, 
-                            self.psf_model.oversampling, 
-                            slit_data_template, 
-                            sum_flux=True, 
-                            ret_host_array=False)
+            return F0*scatter_flux(xspec, yspec, spec.flux.value, 
+                                   psf_x, psf_y, psf_flux, 
+                                   self.psf_model.oversampling, 
+                                   slit_data_template, 
+                                   sum_flux=True, 
+                                   ret_host_array=False)
             
     def loglike(self, model_params, slit_data, slit_data_unc):
         """
