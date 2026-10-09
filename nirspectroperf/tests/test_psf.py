@@ -9,9 +9,8 @@ from nirspectroperf.psf import NIRSpecPSF
 from jwst import datamodels
 
 
-@pytest.mark.needs_data
 def test_nirspec_psf():
-    n6791fits = list(Path('../../ngc6791_cals').glob('*.fits'))
+    n6791fits = list(Path('../ngc6791_cals').glob('*.fits'))
     dm0 = datamodels.open(n6791fits[0])
     slit = dm0.slits[49]
     
@@ -20,6 +19,10 @@ def test_nirspec_psf():
                             oversampling=4, 
                             fov=50)
 
-    psf = nrs_psf.evaluate_psf(0.0, 0.0, 1.1 * u.micron)
+    px, py, psf = nrs_psf.evaluate_psf(0.0, 0.0, 1.1 * u.micron)
     assert isinstance(psf, np.ndarray)
     assert psf.shape == (50*4, 50*4)
+
+    assert isinstance(px, np.ndarray)
+    assert isinstance(py, np.ndarray)
+    assert psf.shape == px.shape == py.shape

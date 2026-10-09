@@ -17,7 +17,7 @@ from astropy.io import fits
 from specutils import Spectrum
 from specutils.manipulation import FluxConservingResampler
 
-PHOENIX_MODEL_PATH = Path(os.environ.get('PHOENIX_MODEL_PATH', '../../../phoenix/fullgrid'))
+PHOENIX_MODEL_PATH = Path(os.environ.get('PHOENIX_MODEL_PATH', '../phoenix/fullgrid'))
 
 
 class SpectrumModelBase(ABC):

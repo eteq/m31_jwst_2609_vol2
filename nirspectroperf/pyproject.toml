@@ -32,6 +32,3 @@ build-backend = "flit_core.buildapi"
 [pytest]
 addopts = ["--import-mode=importlib"]
 pythonpath = ["src"]
-markers = [
-    "needs_data",
-]
