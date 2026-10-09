@@ -1,10 +1,15 @@
+"""
+This module is for constructing the 2d slit images.  This should me the most
+computationally expensive part of the forward model, and is therefore
+heavily optimized via cuda/numba.
+"""
+
 __all__ = ['scatter_flux', 'compute_influence']
 
 import math
 
 import numpy as np
 from numba import cuda, float32
-import cupy as cp
 
 @cuda.jit
 def scatter_flux_kernel(xspec, yspec, fluxspec,
@@ -104,7 +109,7 @@ def compute_influence(xspec, yspec, maxpsf, slittemplate):
     startidxc = cuda.device_array(slittemplate.shape, dtype=np.int32)
     nspecc = cuda.device_array(slittemplate.shape, dtype=np.int32)
 
-    compute_influence[kernelspec_influence](xspecc, yspecc, startidxc, nspecc, maxpsf)
+    compute_influence_kernel[kernelspec_influence](xspecc, yspecc, startidxc, nspecc, maxpsf)
 
     return startidxc, nspecc
 
@@ -116,12 +121,18 @@ def to_cuda_array_if_needed(arr, dtype=np.float32):
         return cuda.to_device(arr.astype(dtype))
 
 
-def scatter_flux(xspec, yspec, spectrum_fnu, psf_x, psf_y, psf_flux, oversampling, slittemplate, sum_flux=True, ret_host_array=False):
+def scatter_flux(xslit, yslit, spectrum_fnu, 
+                 psf_x, psf_y, psf_flux, 
+                 oversampling, 
+                 slittemplate, 
+                 sum_flux=True, 
+                 ret_host_array=False):
     """
     This function takes host-side arrays, and converts them into a form the GPU can use.
     """
-    xspecc = to_cuda_array_if_needed(xspec)
-    yspecc = to_cuda_array_if_needed(yspec)
+    import cupy as cp
+    xslitc = to_cuda_array_if_needed(xslit)
+    yslitc = to_cuda_array_if_needed(yslit)
     fluxspecc = to_cuda_array_if_needed(spectrum_fnu)
 
     psf_xc = to_cuda_array_if_needed(psf_x)
@@ -129,7 +140,7 @@ def scatter_flux(xspec, yspec, spectrum_fnu, psf_x, psf_y, psf_flux, oversamplin
     psf_fluxc = to_cuda_array_if_needed(psf_flux)
 
     maxpsf = max(np.max(psf_x), np.max(psf_y)).astype(np.float32).ravel()
-    startidxc, nspecc = compute_influence(xspecc, yspecc, maxpsf)
+    startidxc, nspecc = compute_influence(xslitc, yslitc, maxpsf)
 
     longest_stretch = int(cp.array(nspecc, copy=False).max())
     longest_stretch32 = math.ceil(longest_stretch / 32) * 32   
@@ -140,7 +151,7 @@ def scatter_flux(xspec, yspec, spectrum_fnu, psf_x, psf_y, psf_flux, oversamplin
     outslitall = cuda.to_device(np.repeat(np.expand_dims(slitarr, axis=-1), kernelspec[-1], axis=-1))
 
 
-    scatter_flux_kernel[kernelspec](xspecc, yspecc, fluxspecc, 
+    scatter_flux_kernel[kernelspec](xslitc, yslitc, fluxspecc, 
                             psf_xc, psf_yc, psf_fluxc,
                             startidxc, nspecc, 
                             outslitall, oversampling)
