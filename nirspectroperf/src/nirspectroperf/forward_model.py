@@ -74,7 +74,7 @@ class NIRSpecSlitModel:
     
             psf_y, psf_x, psf_flux = self.psf_model.evaluate_psf(xslit, yslit, spec.spectral_axis.mean())
     
-            return F0*scatter_flux(xspec, yspec, spec.flux.value, 
+            return scatter_flux(xspec, yspec, F0*spec.flux.value, 
                                    psf_x, psf_y, psf_flux, 
                                    self.psf_model.oversampling, 
                                    slit_data_template, 
