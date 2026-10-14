@@ -10,7 +10,7 @@ def test_model_spectra():
     dm0 = datamodels.open(n6791fits[0])
     slit = dm0.slits[49]
 
-    model = nirspectroperf.NIRSpecSlitModel.make_from_template(dm0, slit)
+    model = nirspectroperf.NIRSpecSlitStarModel.make_from_template(dm0, slit)
     params = [1, 0, 0, 0, 5800, 4.5, 0.0]
     mod = model.make_model(params, slit.data)
 

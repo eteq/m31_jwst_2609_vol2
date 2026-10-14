@@ -58,22 +58,22 @@ class NIRSpecPSF(PSFBase):
 
         nrs.image_mask = 'Single MSA open shutter'
 
-    def evaluate_psf(self, xslit, yslit, wavelength, whichext='OVERDIST'):
+    def evaluate_psf(self, xslitoff, yslitoff, wavelength, whichext='OVERDIST'):
         """
         xslit/yslit can be quantity or fraction of slit width/height, 0 is centered in the slit
         wavelength must be a quantity
         """
         nrs = self.nirspec_psf
         
-        if hasattr(xslit, 'unit'):
-            x0 = xslit.to_value(u.arcsec)
+        if hasattr(xslitoff, 'unit'):
+            x0 = xslitoff.to_value(u.arcsec)
         else:
-            x0 = self.msa_slit_width.to_value(u.arcsec) * xslit
+            x0 = self.msa_slitoff_width.to_value(u.arcsec) * xslitoff
 
-        if hasattr(yslit, 'unit'):
-            y0 = yslit.to_value(u.arcsec)
+        if hasattr(yslitoff, 'unit'):
+            y0 = yslitoff.to_value(u.arcsec)
         else:
-            y0 = self.msa_slit_height.to_value(u.arcsec) * yslit
+            y0 = self.msa_slit_height.to_value(u.arcsec) * yslitoff
 
         nrs.options.update({'source_offset_x': x0, 'source_offset_y': y0})
         psffits = nrs.calc_psf(monochromatic=wavelength.to_value(u.meter), 
@@ -84,8 +84,8 @@ class NIRSpecPSF(PSFBase):
         
         psf_flux = psffits[whichext].data
 
-        #TODO: fix!
-        psfcen_x = psfcen_y = 0
+        psfcen_x = x0
+        psfcen_y = y0
 
         ys, xs = np.indices(psf_flux.shape)
         psf_x = (xs - (xs.shape[1]-1)/2 - psfcen_x)/self.oversampling
