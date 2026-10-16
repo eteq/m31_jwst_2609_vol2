@@ -12,3 +12,5 @@ phoenix
 *.pyc
 *.npz
 dist
+*.hdf5
+*.ipynb_bk

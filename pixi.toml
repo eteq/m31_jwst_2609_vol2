@@ -43,6 +43,7 @@ jwst = ">=1.20.2, <2"
 stpsf = ">=2.1.0, <3"
 astroquery = { git = "https://github.com/astropy/astroquery.git" }
 specutils = ">=2.4.0, <3"
+jaxon = ">=2.0.0, <3"
 
 [feature.cpu.pypi-dependencies]
 numba = ">=0.65.1,<0.66"

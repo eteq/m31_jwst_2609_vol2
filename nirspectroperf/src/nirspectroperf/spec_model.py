@@ -275,8 +275,10 @@ class BlackbodyResMLPModel(eqx.Module):
     layers: list
     temp_index: int
     stellar_parameters_rescaler: StellarParametersRescaler
+    # Not a trainable parameter: excluded via `trainable_filter_spec`
+    wave_microns: jax.Array
 
-    def __init__(self, rkey, 
+    def __init__(self, rkey, wave_microns,
                        in_size=3,
                        out_size=8945, 
                        temp_index=0, 
@@ -290,6 +292,7 @@ class BlackbodyResMLPModel(eqx.Module):
         keys = jax.random.split(rkey, depth+1)
 
         self.temp_index = temp_index
+        self.wave_microns = jnp.asarray(wave_microns)
 
         self.layers = [eqx.nn.Linear(in_size, width_size, key=keys[0]), activation]
         for i in range(1, depth):
@@ -303,14 +306,22 @@ class BlackbodyResMLPModel(eqx.Module):
             self.stellar_parameters_rescaler = stellar_parameters_rescaler
 
     @classmethod
-    def make_from_templates(cls, stellar_parameters, normalized_stellar_models, rkey, **kwargs):
+    def make_from_templates(cls, stellar_parameters, normalized_stellar_models, rkey, wave_microns, **kwargs):
         kwargs['rkey'] = rkey
+        kwargs['wave_microns'] = wave_microns
         kwargs['in_size'] = stellar_parameters.shape[-1]
         kwargs['out_size'] = normalized_stellar_models.shape[-1]
         kwargs['stellar_parameters_rescaler'] = StellarParametersRescaler(stellar_parameters)
 
         return cls(**kwargs)
 
+    @staticmethod
+    def trainable_filter_spec(model):
+        """
+        Pytree of bools marking which leaves are trainable: all arrays except `wave_microns`.
+        """
+        spec = jax.tree_util.tree_map(eqx.is_array, model)
+        return eqx.tree_at(lambda m: m.wave_microns, spec, replace=False)
 
     def __call__(self, x):
         tK = self.stellar_parameters_rescaler.unscale_stellar_parameters(x)[self.temp_index]
@@ -318,21 +329,21 @@ class BlackbodyResMLPModel(eqx.Module):
         for layer in self.layers:
             x = layer(x)
 
-        return x + self.bb_flamb_jax(tK)
+        return x + self.bb_flamb_jax(self.wave_microns, tK)
 
     @staticmethod
-    def bb_flamb_jax(wave_micron, tK):
-        planck_exponent = PLANCK_EXP_CONSTANT / wave_micron
-        unscaled =  wave_micron**-5. / (jnp.exp(planck_exponent / tK) - 1.0)
+    def bb_flamb_jax(wave_microns, tK):
+        planck_exponent = PLANCK_EXP_CONSTANT / wave_microns
+        unscaled =  wave_microns**-5. / (jnp.exp(planck_exponent / tK) - 1.0)
         # a clever scaling might be possible using the wien displacement law,
         # but to match the data, just normalize the same way as the data (divide by the median and half)
         return unscaled/jnp.median(unscaled) * 0.5
 
 
     @staticmethod
-    def bb_fnu_jax(wave_micron, tK):
-        planck_exponent = PLANCK_EXP_CONSTANT / wave_micron
-        unscaled =  wave_micron**-3. / (jnp.exp(planck_exponent / tK) - 1.0)
+    def bb_fnu_jax(wave_microns, tK):
+        planck_exponent = PLANCK_EXP_CONSTANT / wave_microns
+        unscaled =  wave_microns**-3. / (jnp.exp(planck_exponent / tK) - 1.0)
         # a clever scaling might be possible using the wien displacement law,
         # but to match the data, just normalize the same way as the data (divide by the median and half)
         return unscaled/jnp.median(unscaled) * 0.5
@@ -359,7 +370,14 @@ class BlackbodyResMLPModel(eqx.Module):
         return huber_term, grad_term, w, gscaling
 
     @classmethod
-    def train(cls, stellar_parameters, normalized_stellar_models, batch_size, nepochs, validation_split_fraction, random_key=None, pbar=True):
+    def train(cls, stellar_parameters, 
+                   normalized_stellar_models, 
+                   wave_microns, 
+                   batch_size, 
+                   nepochs, 
+                   validation_split_fraction, 
+                   random_key=None, 
+                   pbar=True):
         tqdm = None
         if pbar is not None:
             from tqdm.auto import tqdm
@@ -374,7 +392,8 @@ class BlackbodyResMLPModel(eqx.Module):
 
         model = cls.make_from_templates(stellar_parameters=stellar_parameters, 
                                         normalized_stellar_models=normalized_stellar_models, 
-                                        rkey=rkmod)
+                                        rkey=rkmod,
+                                        wave_microns=wave_microns)
         stellar_parameters_rescaled = model.stellar_parameters_rescaler.rescale_stellar_parameters(stellar_parameters)
 
         nvalid = int(normalized_stellar_models.shape[0] * validation_split_fraction)
@@ -400,7 +419,8 @@ class BlackbodyResMLPModel(eqx.Module):
         lr_schedule = optax.schedules.join_schedules([single_schedule]*ncycles, ((np.arange(ncycles-1)+1)*ntot/ncycles).astype(int))
 
         optim = optax.inject_hyperparams(optax.adamw)(learning_rate=lr_schedule)
-        opt_state = optim.init(eqx.filter(model, eqx.is_array))
+        filter_spec = cls.trainable_filter_spec(model)
+        opt_state = optim.init(eqx.filter(model, filter_spec))
 
         mean_loss = eqx.filter_jit(cls.mean_loss)
         loss_pieces = eqx.filter_jit(cls.loss_pieces)
@@ -408,10 +428,13 @@ class BlackbodyResMLPModel(eqx.Module):
 
         @eqx.filter_jit
         def make_step(model, opt_state, xsp, y):
-            loss_value, grads = eqx.filter_value_and_grad(mean_loss)(model, xsp, y)
-            updates, opt_state = optim.update(
-                grads, opt_state, eqx.filter(model, eqx.is_array)
-            )
+            diff_model, static_model = eqx.partition(model, filter_spec)
+
+            def diff_loss(diff_model):
+                return mean_loss(eqx.combine(diff_model, static_model), xsp, y)
+
+            loss_value, grads = jax.value_and_grad(diff_loss)(diff_model)
+            updates, opt_state = optim.update(grads, opt_state, diff_model)
             model = eqx.apply_updates(model, updates)
             return model, opt_state, loss_value
 
@@ -445,7 +468,9 @@ class BlackbodyResMLPModel(eqx.Module):
             vlosses.append(mean_loss(model, validation_stellar_parameters_rescaled, validation_normalized_stellar_models))
             epoch_boundaries.append(len(tlosses))
 
-        train_info = {'epoch_boundaries': epoch_boundaries, 'training_loss':tlosses, 'validation_loss':vlosses, 'learning_rates':lrs}
+        train_info = {'epoch_boundaries': epoch_boundaries, 'training_loss':tlosses, 'validation_loss':vlosses, 'learning_rates':lrs,
+                      'validation_set': dict(stellar_parameters_rescaled=validation_stellar_parameters_rescaled, 
+                                             normalized_stellar_models=validation_normalized_stellar_models)}
 
         return model, train_info
 
