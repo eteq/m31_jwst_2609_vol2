@@ -4,6 +4,7 @@ do so quickly enough to be part of the inner inference loop.
 """
 __all__ = ['PhoenixModelsDirect', 'PhoenixModelsResampled',
            'StellarParametersRescaler', 'BlackbodyResMLPModel',
+           'SpectrumModelBlackbodyResMLP',
            'supress_multiple_slash_warning']
 
 import os
@@ -348,9 +349,31 @@ class BlackbodyResMLPModel(eqx.Module):
         # but to match the data, just normalize the same way as the data (divide by the median and half)
         return unscaled/jnp.median(unscaled) * 0.5
 
+class SpectrumModelBlackbodyResMLP(SpectrumModelBase):
+    def __init__(self, trained_model):
+        self._trained_model = trained_model
+        self._jitted_trained_model_call = jax.jit(self._trained_model.__call__)
+
+    @property
+    def trained_model(self):
+        return self._trained_model
+
+    @property
+    def wave_microns(self):
+        return self._trained_model.wave_microns
+
+    def make_raw_spectrum(self, teff, logg, feh):
+        """
+        Returns flux for the spectrum in Jy
+        """
+        sparams = jnp.array([teff, logg, feh])
+        uparams = self._trained_model.stellar_parameters_rescaler.rescale_stellar_parameters(sparams)
+        return self._jitted_trained_model_call(uparams)
+
+    
     @staticmethod
     def mean_loss(model, xsp, y, delta=1.0, lambmax=2, lambmin=1, s=.3, lthresh=-4):
-        huber_term, grad_term, _, gscaling = BlackbodyResMLPModel.loss_pieces(model, xsp, y, delta, lambmax, lambmin, s, lthresh)
+        huber_term, grad_term, _, gscaling = SpectrumModelBlackbodyResMLP.loss_pieces(model, xsp, y, delta, lambmax, lambmin, s, lthresh)
         return huber_term + gscaling * grad_term
 
 
@@ -368,6 +391,9 @@ class BlackbodyResMLPModel(eqx.Module):
         gscaling = (w*(lambmax - lambmin) + lambmin)
         
         return huber_term, grad_term, w, gscaling
+
+
+    generative_model_class = BlackbodyResMLPModel
 
     @classmethod
     def train(cls, stellar_parameters, 
@@ -390,7 +416,8 @@ class BlackbodyResMLPModel(eqx.Module):
 
         rkmod, rkepoch, rkvsplit = jax.random.split(random_key, 3)
 
-        model = cls.make_from_templates(stellar_parameters=stellar_parameters, 
+        model = cls.generative_model_class.make_from_templates(
+                                        stellar_parameters=stellar_parameters, 
                                         normalized_stellar_models=normalized_stellar_models, 
                                         rkey=rkmod,
                                         wave_microns=wave_microns)
@@ -419,7 +446,7 @@ class BlackbodyResMLPModel(eqx.Module):
         lr_schedule = optax.schedules.join_schedules([single_schedule]*ncycles, ((np.arange(ncycles-1)+1)*ntot/ncycles).astype(int))
 
         optim = optax.inject_hyperparams(optax.adamw)(learning_rate=lr_schedule)
-        filter_spec = cls.trainable_filter_spec(model)
+        filter_spec = model.trainable_filter_spec(model)
         opt_state = optim.init(eqx.filter(model, filter_spec))
 
         mean_loss = eqx.filter_jit(cls.mean_loss)
@@ -472,7 +499,9 @@ class BlackbodyResMLPModel(eqx.Module):
                       'validation_set': dict(stellar_parameters_rescaled=validation_stellar_parameters_rescaled, 
                                              normalized_stellar_models=validation_normalized_stellar_models)}
 
-        return model, train_info
+        return cls(model), train_info
+
+
 
 
 def supress_multiple_slash_warning():
