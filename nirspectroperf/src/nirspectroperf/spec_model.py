@@ -401,7 +401,11 @@ class SpectrumModelBlackbodyResMLP(SpectrumModelBase):
                    wave_microns, 
                    batch_size, 
                    nepochs, 
-                   validation_split_fraction, 
+                   ncycles,
+                   minlr,
+                   peaklr,
+                   warmup_fraction,
+                   validation_split_fraction,
                    random_key=None, 
                    pbar=True):
         tqdm = None
@@ -435,13 +439,12 @@ class SpectrumModelBlackbodyResMLP(SpectrumModelBase):
         nperepoch = int(np.ceil(train_normalized_stellar_models.shape[0] / batch_size))
         ntot = nepochs*nperepoch
 
-        ncycles = 4
         single_schedule = optax.schedules.warmup_cosine_decay_schedule(
-            init_value=1e-4,
-            peak_value=3e-3,
-            warmup_steps=int(ntot*0.1/ncycles),
+            init_value=minlr,
+            peak_value=peaklr,
+            warmup_steps=int(ntot*warmup_fraction/ncycles),
             decay_steps=int(ntot/ncycles),
-            end_value=1e-4
+            end_value=minlr
         )
         lr_schedule = optax.schedules.join_schedules([single_schedule]*ncycles, ((np.arange(ncycles-1)+1)*ntot/ncycles).astype(int))
 
