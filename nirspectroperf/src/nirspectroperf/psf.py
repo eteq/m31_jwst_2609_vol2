@@ -58,6 +58,8 @@ class NIRSpecPSF(PSFBase):
 
         nrs.image_mask = 'Single MSA open shutter'
 
+        self.last_header = None
+
     def evaluate_psf(self, xslitoff, yslitoff, wavelength, whichext='OVERDIST'):
         """
         xslit/yslit can be quantity or fraction of slit width/height, 0 is centered in the slit
@@ -83,6 +85,7 @@ class NIRSpecPSF(PSFBase):
                                display=False)
         
         psf_flux = psffits[whichext].data
+        self.last_header = psffits[whichext].header
 
         psfcen_x = x0
         psfcen_y = y0
@@ -93,9 +96,9 @@ class NIRSpecPSF(PSFBase):
 
         return psf_x, psf_y, psf_flux
 
-    def make_psf_points(self, n, wavelength, whichext='OVERDIST', pbar=True):
-        psfxoffs = (np.random.rand(n)-0.5)*self.msa_slit_width
-        psfyoffs = (np.random.rand(n)-0.5)*self.msa_slit_height
+    def make_psf_points(self, n, wavelength, whichext='OVERDIST', slit_fraction=1, pbar=True):
+        psfxoffs = (np.random.rand(n)-0.5)*self.msa_slit_width*slit_fraction
+        psfyoffs = (np.random.rand(n)-0.5)*self.msa_slit_height*slit_fraction
 
         if pbar:
             if pbar is True:
@@ -110,13 +113,15 @@ class NIRSpecPSF(PSFBase):
         
         return np.array(psfs), np.array(xpx), np.array(ypx), np.array(psfxoffs), np.array(psfyoffs)
 
-    def make_psf_grid(self, n, wavelength, whichext='OVERDIST', pbar=True):
+    def make_psf_grid(self, n, wavelength, whichext='OVERDIST', slit_fraction=1, pbar=True):
         nperax = int(n**0.5)
         if nperax != n**0.5:
             raise ValueError("n must be a perfect square")
 
-        psfxs = np.linspace(-0.5*self.msa_slit_width, 0.5*self.msa_slit_width, nperax)
-        psfys = np.linspace(-0.5*self.msa_slit_height, 0.5*self.msa_slit_height, nperax)
+        halfw = 0.5*self.msa_slit_width
+        psfxs = np.linspace(-halfw * slit_fraction, halfw * slit_fraction, nperax)
+        halfh = 0.5*self.msa_slit_height
+        psfys = np.linspace(-halfh * slit_fraction, halfh * slit_fraction, nperax)
 
         if pbar:
             if pbar is True:
@@ -308,7 +313,10 @@ class NIRSpecPSFINREmulator(PSFBase):
         
     @classmethod
     def train(cls, psfarrs, psfxoffs, psfyoffs, batch_size, nepochs, 
-            learning_rate, rkey, xypx=None, pbar=True, **inrkwargs):
+              ncycles, minlr, peaklr, warmup_fraction,
+              rkey, xypx=None, 
+              loss_meantologweight='progressive', loss_eps=0,
+              pbar=True, **inrkwargs):
         if 'n_in_coo' in inrkwargs and inrkwargs['n_in_coo'] != 4:
             raise ValueError("n_in_coo should not be specified in inrkwargs")
         inrkwargs['n_in_coo'] = 4
@@ -356,7 +364,16 @@ class NIRSpecPSFINREmulator(PSFBase):
             model = eqx.apply_updates(model, updates)
             return model, opt_state, loss
 
-        optimizer = optax.adam(learning_rate=learning_rate)
+        ntot = nepochs
+        single_schedule = optax.schedules.warmup_cosine_decay_schedule(
+                init_value=peaklr,
+                peak_value=minlr,
+                warmup_steps=int(ntot*warmup_fraction/ncycles),
+                decay_steps=int(ntot/ncycles),
+                end_value=peaklr
+            )
+        lr_schedule = optax.schedules.join_schedules([single_schedule]*ncycles, ((np.arange(ncycles-1)+1)*ntot/ncycles).astype(int))
+        optimizer = optax.inject_hyperparams(optax.adam)(learning_rate=lr_schedule)
 
         opt_state = optimizer.init(eqx.filter(model, eqx.is_array))
 
@@ -369,19 +386,28 @@ class NIRSpecPSFINREmulator(PSFBase):
             pbar = lambda x:x
 
         pb = pbar(range(nepochs))
+        lrs = []
         for i in pb:
             rkey, subkey = jax.random.split(rkey)
             batch_idx = jax.random.choice(subkey, ys.size, shape=(batch_size,), replace=False)#, p=sampleprobs)
             xi = xs[batch_idx]
             yi = ys[batch_idx]
-            
-            model, opt_state, loss_value = make_step(model, opt_state, xi, yi, optimizer.update, wl=0.5,eps=0)#wl=jnp.ones(len(batch_idx))*(1-fraci), eps=0)
+            if loss_meantologweight == 'progressive':
+                fraccycle = (i / (nepochs-1) * ncycles )% 1
+                wls = (np.ones(batch_size)*(1-fraccycle)) 
+                model, opt_state, loss_value = make_step(model, opt_state, xi, yi, optimizer.update, 
+                                                        wl=wls, eps=loss_eps)
+            else:
+                model, opt_state, loss_value = make_step(model, opt_state, xi, yi, optimizer.update, 
+                                                        wl=loss_meantologweight, eps=loss_eps)
 
             losses = losses.at[i].set(loss_value)
+            lrs.append(opt_state.hyperparams['learning_rate'])
             if hasattr(pb, 'set_postfix'):
                 pb.set_postfix({"loss": losses[i]})
 
         train_info = {
-            'losses': losses
+            'losses': losses,
+            'learning_rates': lrs
         }
         return cls(model, xnorm, (xpx, ypx)), train_info
