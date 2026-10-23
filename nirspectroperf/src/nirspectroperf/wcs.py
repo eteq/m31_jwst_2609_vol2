@@ -14,7 +14,7 @@ from astropy import units as u
 
 import jax
 import jax.numpy as jnp
-import orthax
+
 
 class W2P(ABC):
     """
@@ -107,5 +107,8 @@ class ChebyshevW2P(W2P):
 
 @jax.jit(static_argnums=3)
 def _cheb_approx(x, y, z, degs, coeffs):
+    # TODO: replace with lazy loading from py 3.15
+    import orthax
+
     vandermat = orthax.chebyshev.chebvander3d(x, y, z, degs)
     return (vandermat @ coeffs).T
