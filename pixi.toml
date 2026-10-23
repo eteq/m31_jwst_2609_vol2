@@ -26,6 +26,7 @@ pytest = ">=9.0.3,<10"
 jupyterlab = ">=4.5.8,<5"
 orthax = ">=0.2.10,<0.3"
 multiprocess = ">=0.70.19,<0.71"
+flit = ">=4.1.0,<5"
 
 [feature.gpu.dependencies]
 
