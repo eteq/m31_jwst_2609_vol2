@@ -19,6 +19,7 @@ dependencies = [
   "astropy",
   "numba",
   "numba-cuda",
+  "papermill"
 ]
 
 [project.urls]
