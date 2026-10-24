@@ -2,8 +2,11 @@
 authors = ["Erik Tollerud <erik.tollerud@gmail.com>"]
 channels = ["conda-forge"]
 name = "m31_jwst_2609_vol2"
-platforms = ["linux-64"]
 version = "0.1.0"
+platforms = [
+    "linux-64",
+    { platform = "linux-64", cuda = "13.4" }
+]
 
 [tasks]
 
@@ -29,12 +32,12 @@ multiprocess = ">=0.70.19,<0.71"
 flit = ">=4.1.0,<5"
 papermill = ">=2.7.0,<3"
 
-[feature.gpu.dependencies]
 
-[feature.cpu.dependencies]
+[feature.cpu]
+platforms = ["linux-64"] 
 
-[feature.gpu.system-requirements]
-cuda = "13"
+[feature.gpu]
+platforms = ["linux-64-cuda-13-4"] 
 
 [environments]
 gpu = ["gpu"]
@@ -48,11 +51,11 @@ specutils = ">=2.4.0, <3"
 jaxon = ">=2.0.0, <3"
 
 [feature.cpu.pypi-dependencies]
-numba = ">=0.65.1,<0.66"
+numba = ">=0.65.1"
 
 [feature.gpu.pypi-dependencies]
-jax = { version = ">=0.9.2", extras = ["cuda13"] }
+jax = { version = ">=0.12.0", extras = ["cuda13"] }
 numba-cuda = { version = ">=0.30.2,<0.31", extras=["cu13"] }
-numba = ">=0.65.1,<0.66"
+numba = ">=0.65.1"
 cupy-cuda13x = ">=0.14"
 nirspectroperf = { path = "./nirspectroperf", editable = true }
