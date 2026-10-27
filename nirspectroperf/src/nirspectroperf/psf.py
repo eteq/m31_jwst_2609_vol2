@@ -8,6 +8,7 @@ depends on stpsf
 
 __all__ = ['NIRSpecPSF']
 
+import time
 from abc import ABC, abstractmethod
 
 import numpy as np
@@ -366,11 +367,11 @@ class NIRSpecPSFINREmulator(PSFBase):
 
         ntot = nepochs
         single_schedule = optax.schedules.warmup_cosine_decay_schedule(
-                init_value=peaklr,
-                peak_value=minlr,
+                init_value=minlr,
+                peak_value=peaklr,
                 warmup_steps=int(ntot*warmup_fraction/ncycles),
                 decay_steps=int(ntot/ncycles),
-                end_value=peaklr
+                end_value=minlr
             )
         lr_schedule = optax.schedules.join_schedules([single_schedule]*ncycles, ((np.arange(ncycles-1)+1)*ntot/ncycles).astype(int))
         optimizer = optax.inject_hyperparams(optax.adam)(learning_rate=lr_schedule)
@@ -382,6 +383,12 @@ class NIRSpecPSFINREmulator(PSFBase):
             if pbar is True:
                 from tqdm.auto import tqdm
                 pbar = tqdm
+            else:
+                try: 
+                    f = float(pbar)
+                except:
+                    pass # assume it failed and continue
+                pbar = lambda x: PrintFracPbar(x, printfrac=f)
         else:
             pbar = lambda x:x
 
@@ -411,3 +418,38 @@ class NIRSpecPSFINREmulator(PSFBase):
             'learning_rates': lrs
         }
         return cls(model, xnorm, (xpx, ypx)), train_info
+
+class PrintFracPbar:
+    def __init__(self, wrapped, printfrac=.1, total=None):
+        self.wrapped = wrapped
+        self.printfrac = printfrac
+
+        self.current = None
+        self.lenwrapped = total
+        self.starttime = None
+
+    def __iter__(self):
+        if self.current is None:
+            lenwrapped = len(self.wrapped)
+            new = self.__class__(iter(self.wrapped), self.printfrac, total=lenwrapped)
+            new.current = 0
+            return new
+        else:
+            return self
+
+    def __next__(self):
+        if self.starttime is None:
+            self.starttime = time.time()
+            
+        nextelem = next(self.wrapped) #raises stop when done
+        et = time.time()
+
+        if self.current % int(self.lenwrapped * self.printfrac) == 0:
+            if self.current != 0:
+                dt = et - self.starttime
+                currfrac = self.current / self.lenwrapped
+                remaining_time = (dt/currfrac) * (1-currfrac)
+                print(f'On iter {self.current} of {self.lenwrapped} ({currfrac:.3%}). Time elapsed:{dt:.5} seconds. Estimated remaining time:{remaining_time:.5} seconds.')
+
+        self.current += 1
+        return nextelem
