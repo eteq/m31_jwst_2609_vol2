@@ -12,5 +12,6 @@ phoenix
 *.npz
 dist
 *.hdf5
+# .model is an old naming scheme for some of the model files, although the templates should now output .hdf5
 *.model
 *.ipynb_bk
