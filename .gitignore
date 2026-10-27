@@ -12,4 +12,5 @@ phoenix
 *.npz
 dist
 *.hdf5
+*.model
 *.ipynb_bk
