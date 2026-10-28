@@ -22,12 +22,43 @@ import equinox as eqx
 import optax
 
 class PSFBase(ABC):
+    def __init__(self, oversampling=1, fov=None):
+        self._oversampling = oversampling
+
+        self._fov_pixels = self._fov_arcsec = None
+        if u.arcsec.is_equivalent(fov):
+            self._fov_arcsec = fov.to_value(u.arcsec)
+        elif u.pixel.is_equivalent(fov):
+            self._fov_pixels = fov.to_value(u.pixel)
+        else:
+            self._fov_pixels = fov
+
     @abstractmethod
     def evaluate_psf(self, xslit, yslit, wavelength):
         """
         should return psf_x, psf_y, psf_flux where psf_x/y are in native pixel coordinates
         """
         pass
+
+    @property
+    def oversampling(self):
+        return self._oversampling
+
+    @property
+    def fov_pixels(self):
+        return self._fov_pixels
+
+    @property
+    def fov_arcsec(self):
+        return self._fov_arcsec
+
+    @property
+    def fov(self):
+        if self._fov_pixels is not None:
+            return self._fov_pixels << u.pixel
+        
+        return self._fov_arcsec << u.arcsec
+
 
 class NIRSpecPSF(PSFBase):
     msa_slit_width = 0.2 * u.arcsec
@@ -38,7 +69,10 @@ class NIRSpecPSF(PSFBase):
                     slit, 
                     oversampling=4, 
                     fov=48):
-        import stpsf
+        #TODO: replace with lazy loading in py 3.15?
+        import stpsf  # here due to this doing things at import time
+
+        super().__init__(oversampling=oversampling, fov=fov)
         
         self.nirspec_psf = nrs = stpsf.NIRSpec()
         # at the time of this writing, the detector position variance is probably not right, or at leat not important
@@ -48,14 +82,6 @@ class NIRSpecPSF(PSFBase):
         xdet, ydet = slit.meta.wcs.transform('detector', 'sca', *np.indices(slit.data.shape)[::-1])
         nrs.detector_position = (np.mean(xdet), np.mean(ydet))
         nrs.load_wss_opd_by_date(Time(observation_template_dm.meta.exposure.mid_time, format='mjd'))
-        self.oversampling = oversampling
-        self.fov_pixels = self.fov_arcsec = None
-        if u.arcsec.is_equivalent(fov):
-            self.fov_arcsec = fov.to_value(u.arcsec)
-        elif u.pixel.is_equivalent(fov):
-            self.fov_pixels = fov.to_value(u.pixel)
-        else:
-            self.fov_pixels = fov
 
         nrs.image_mask = 'Single MSA open shutter'
 
@@ -71,7 +97,7 @@ class NIRSpecPSF(PSFBase):
         if hasattr(xslitoff, 'unit'):
             x0 = xslitoff.to_value(u.arcsec)
         else:
-            x0 = self.msa_slitoff_width.to_value(u.arcsec) * xslitoff
+            x0 = self.msa_slit_width.to_value(u.arcsec) * xslitoff
 
         if hasattr(yslitoff, 'unit'):
             y0 = yslitoff.to_value(u.arcsec)
@@ -265,10 +291,13 @@ class CoordinateNormalizer:
 
 
 class NIRSpecPSFINREmulator(PSFBase):
-    def __init__(self, trained_model, coordinate_normalizer, xygrid, normalize_flux=True):
+    def __init__(self, trained_model, coordinate_normalizer, xygrid, 
+                 normalize_flux=True, oversampling=4, fov=48):
+        super().__init__(oversampling=oversampling, fov=fov)
+
         self.trained_model = trained_model
 
-        self.xygrid = xygrid
+        self._xgrid, self._ygrid = self._xygrid = xygrid
 
         npx, noff = coordinate_normalizer.split([0, 1], [2, 3])
         self.coordinate_normalizer = npx
@@ -283,18 +312,22 @@ class NIRSpecPSFINREmulator(PSFBase):
         # here we pre-prepare an input array.  The first two elements of the first dimension are
         # pre-populated with the pixel coordinates since those don't change. The latter two 
         # elements are populated at evaluation time
-        uxygrid = jnp.array(self.coordinate_normalizer.normalize(np.array(self.xygrid)))
+        uxygrid = jnp.array(self.coordinate_normalizer.normalize(np.array(self._xygrid)))
         self._ingrid = jnp.concatenate([uxygrid, jnp.zeros((2, *uxygrid.shape[1:]))], axis=0)
 
         self.normalize_flux = normalize_flux
 
         self._jitted_eval = None
 
+    @property
+    def xygrid(self):
+        return self._xygrid
+
     def evaluate_psf(self, xslitoff, yslitoff, wavelength):
         if self._jitted_eval is None:
             self._jitted_eval = jax.jit(self._do_eval)
 
-        return self._jitted_eval(xslitoff, yslitoff, wavelength)
+        return self._xgrid, self._ygrid, self._jitted_eval(xslitoff, yslitoff, wavelength)
 
     def _do_eval(self, xslitoff, yslitoff, wavelength):
         # we currently ignore wavelength since the variation is basically nil
@@ -310,6 +343,9 @@ class NIRSpecPSFINREmulator(PSFBase):
 
         if self.normalize_flux:
             psf = psf / psf.sum()
+            if self.normalize_flux is not True:
+                psf *= self.normalize_flux
+
         return psf
         
     @classmethod
@@ -317,7 +353,7 @@ class NIRSpecPSFINREmulator(PSFBase):
               ncycles, minlr, peaklr, warmup_fraction,
               rkey, xypx=None, 
               loss_meantologweight='progressive', loss_eps=0,
-              pbar=True, **inrkwargs):
+              pbar=True, oversampling=4, fov=48, **inrkwargs):
         if 'n_in_coo' in inrkwargs and inrkwargs['n_in_coo'] != 4:
             raise ValueError("n_in_coo should not be specified in inrkwargs")
         inrkwargs['n_in_coo'] = 4
@@ -413,11 +449,16 @@ class NIRSpecPSFINREmulator(PSFBase):
             if hasattr(pb, 'set_postfix'):
                 pb.set_postfix({"loss": losses[i]})
 
+        newobj = cls(model, xnorm, (xpx, ypx), oversampling=oversampling, fov=fov)
+        newobj.training_parameters = {}
+        for pnm in ['nepochs', 'batch_size', 'loss_meantologweight', 'loss_eps', 'ncycles', 'ntot', 'minlr', 'peaklr', 'warmup_fraction', 'rkey', 'xypx', 'oversampling', 'fov']:
+            newobj.training_parameters[pnm] = locals()[pnm]
+
         train_info = {
             'losses': losses,
             'learning_rates': lrs
         }
-        return cls(model, xnorm, (xpx, ypx)), train_info
+        return newobj, train_info
 
 class PrintFracPbar:
     def __init__(self, wrapped, printfrac=.1, total=None):

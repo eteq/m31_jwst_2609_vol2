@@ -103,6 +103,7 @@ class ChebyshevW2P(W2P):
         decd = self.to_cheb_domain(dec, self.domain_infos[1])
         waved = self.to_cheb_domain(wave, self.domain_infos[2])
         with jax.default_matmul_precision(self.matmul_precision):
+            rad, decd, waved = jnp.broadcast_arrays(rad, decd, waved)
             return _cheb_approx(rad, decd, waved, self.degs, self.chebcoeffs)
 
 @jax.jit(static_argnums=3)

@@ -113,10 +113,9 @@ def compute_influence(xspec, yspec, maxpsf, slittemplate):
 
     return startidxc, nspecc
 
-
 def to_cuda_array_if_needed(arr, dtype=np.float32):
     if cuda.is_cuda_array(arr):
-        return arr
+        return cuda.as_cuda_array(arr)
     else:
         return cuda.to_device(arr.astype(dtype))
 
@@ -141,7 +140,7 @@ def scatter_flux(xspec, yspec, spectrum_fnu,
     psf_fluxc = to_cuda_array_if_needed(psf_flux)
 
     maxpsf = max(np.max(psf_x), np.max(psf_y)).astype(np.float32).ravel()[0]
-    startidxc, nspecc = compute_influence(xspecc, yspecc, maxpsf, slittemplate)
+    startidxc, nspecc = compute_influence(xspecc, yspecc, float(maxpsf), slittemplate)
 
     longest_stretch = int(cp.array(nspecc, copy=False).max())
     longest_stretch32 = math.ceil(longest_stretch / 32) * 32   
