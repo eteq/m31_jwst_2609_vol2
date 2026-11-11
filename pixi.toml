@@ -13,7 +13,7 @@ platforms = [
 [dependencies]
 python = "3.14.*"
 astropy = ">=7.2.0,<8"
-numpy = ">=2.4.3,<3"
+numpy = ">=2.4,<2.5"
 scipy = ">=1.16,<2"
 matplotlib = ">=3.10.8,<4"
 jupyter = ">=1.1.1,<2"

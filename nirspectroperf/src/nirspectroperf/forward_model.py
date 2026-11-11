@@ -5,6 +5,7 @@ evaluation.
 __all__ = ['NIRSpecSlitStarModel']
 
 import math
+from functools import cached_property
 
 import numpy as np
 
@@ -23,7 +24,9 @@ class NIRSpecSlitStarModel:
     Forward model of a nirspec slit 
     """
     param_names = 'F0, x_slit_offset, y_slit_offset, v, teff, logg, feh'.split(', ')
-    param_units = [u.arcsec, u.arcsec, u.km/u.s, u.K, u.dimensionless_unscaled, u.dimensionless_unscaled]
+    param_units = [u.nJy/u.ct, u.arcsec, u.arcsec, u.km/u.s, u.K, u.dimensionless_unscaled, u.dimensionless_unscaled]
+    assert len(param_names) == len(param_units)
+    param_name_to_unit = dict(zip(param_names, param_units))
 
     def __init__(self, spec_model, psf_model, w2p, slit_data_template, 
                  ra0_deg=None, dec0_deg=None, x_slit0=None, y_slit0=None):
@@ -34,6 +37,9 @@ class NIRSpecSlitStarModel:
 
         if slit_data_template is an actual slit object, ra0/dec0/xslit/yslit
         will be inferred from it
+
+        x_slit0/y_slit0 will be interpreted as slit fractions if they are floats, 
+        or as angular quantities if they have units.
         """
         self.spec_model = spec_model
         self.psf_model = psf_model
@@ -70,9 +76,16 @@ class NIRSpecSlitStarModel:
         except AttributeError:
             self._dec0_deg = dec0_deg
 
-        #TODO: same as the above, but I can't recall if at this point x_slit0 are arcsec or slit coords...
-        self.x_slit0 = x_slit0
-        self.y_slit0 = y_slit0
+        try:
+            self._x_slit0_asec = x_slit0.to_value(u.arcsec)
+        except AttributeError:
+            # assume its a slit fraction
+            self._x_slit0_asec = x_slit0*NIRSpecPSF.msa_slit_width.value
+        try:
+            self._y_slit0_asec = y_slit0.to_value(u.arcsec)
+        except AttributeError:
+            # assume its already a slit fraction
+            self._y_slit0_asec = y_slit0*NIRSpecPSF.msa_slit_height.value
 
 
         if hasattr(slit_data_template, 'shape'):
@@ -103,13 +116,32 @@ class NIRSpecSlitStarModel:
     @property
     def dec0(self):
         return self._dec0_deg * u.deg
+    
+    @property
+    def x_slit0(self):
+        return self._x_slit0_asec * u.arcsec
+    @property
+    def y_slit0(self):
+        return self._y_slit0_asec * u.arcsec
+
+    def slit_offsets_frac(self, x_slit_offset=0, y_slit_offset=0):
+        """
+        where a slit lands in the slit, expressed as a fraction of the slit width and height
+
+        x/y_slit_offset interpretated the same as evaluate_psf in the psf_model (i.e., arcsec if not a Quantity)
+        """
+        xa, ya = self.psf_model._xyoffconv(x_slit_offset, y_slit_offset)
+        xfrac = (xa + self._x_slit0_asec)/self.psf_model.msa_slit_width.to_value(u.arcsec)
+        yfrac = (ya + self._y_slit0_asec)/self.psf_model.msa_slit_height.to_value(u.arcsec)
+        return xfrac, yfrac
 
     _ARCSEC_TO_DEG = u.arcsec.to(u.deg)
-    _CKMS = cnst.c.to_value(param_units[2])
+    _CKMS = cnst.c.to_value(param_name_to_unit['v'])
     def make_model(self, model_params):
             F0, x_slit_offset, y_slit_offset, v, teff, logg, feh = model_params
     
             spec = self.spec_model.make_spectrum(teff, logg, feh)
+            fnudnu = spec.flux.value*self.spec_model.dnu_hz
 
             raoff = decoff = 0 # might change in the future as a separate parameter?
             ra = self._ra0_deg + raoff*self._ARCSEC_TO_DEG
@@ -117,12 +149,16 @@ class NIRSpecSlitStarModel:
             wave = self.spec_model.wave_microns*(1 + v/self._CKMS)
 
             xspec, yspec = self.w2p.evaluate_wcs_values(ra, dec, wave)
-            xslit = self.x_slit0 + x_slit_offset
-            yslit = self.y_slit0 + y_slit_offset
+            xslit = self._x_slit0_asec + x_slit_offset
+            yslit = self._y_slit0_asec + y_slit_offset
     
-            psf_y, psf_x, psf_flux = self.psf_model.evaluate_psf(xslit, yslit, spec.spectral_axis.mean())
-    
-            return scatter_flux(xspec, yspec, F0*spec.flux.value, 
+            psf_x, psf_y, psf_flux = self.psf_model.evaluate_psf(xslit, yslit, spec.spectral_axis.mean())
+
+            pxperasec = self.psf_model.detector_pixelscale.to_value(u.pixel/u.arcsec)
+            psf_x = psf_x + pxperasec * x_slit_offset
+            psf_y = psf_y + pxperasec * y_slit_offset
+
+            return scatter_flux(xspec, yspec, F0*fnudnu, 
                                    psf_x, psf_y, psf_flux, 
                                    self.psf_model.oversampling, 
                                    self.slit_data_template, 

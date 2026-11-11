@@ -40,6 +40,30 @@ class PSFBase(ABC):
         """
         pass
 
+    @staticmethod
+    def _xyoffconv(xoff, yoff):
+        if not hasattr(xoff, 'unit'):
+            xoff = xoff << u.arcsec
+
+        if xoff.unit.is_equivalent(u.dimensionless_unscaled):
+            x0asec = NIRSpecPSF.msa_slit_width.to_value(u.arcsec) * xoff
+        elif xoff.unit.is_equivalent(u.pixel):
+            raise ValueError('"pixel" is ambiguous for offsets - use dimensionless_unscaled for fraction of slit')
+        else:
+            x0asec = xoff.to_value(u.arcsec)
+
+        if not hasattr(yoff, 'unit'):
+            yoff = yoff << u.arcsec
+
+        if yoff.unit.is_equivalent(u.dimensionless_unscaled):
+            y0asec = NIRSpecPSF.msa_slit_height.to_value(u.arcsec) * yoff
+        elif yoff.unit.is_equivalent(u.pixel):
+            raise ValueError('"pixel" is ambiguous for offsets - use dimensionless_unscaled for fraction of slit')
+        else:
+            y0asec = yoff.to_value(u.arcsec)
+
+        return x0asec, y0asec
+
     @property
     def oversampling(self):
         return self._oversampling
@@ -89,22 +113,19 @@ class NIRSpecPSF(PSFBase):
 
     def evaluate_psf(self, xslitoff, yslitoff, wavelength, whichext='OVERDIST'):
         """
-        xslit/yslit can be quantity or fraction of slit width/height, 0 is centered in the slit
+        xslit/yslit can be quantity or fraction of slit width/height, 0 is 
+        centered in the slit
         wavelength must be a quantity
+
+        returns a (psf_x, psf_y, psf_flux) where psf_x/y are in detector pixel
+        coordinates relative to the source position in the slit (i.e., (0, 0) 
+        is the center of the source)
         """
         nrs = self.nirspec_psf
         
-        if hasattr(xslitoff, 'unit'):
-            x0 = xslitoff.to_value(u.arcsec)
-        else:
-            x0 = self.msa_slit_width.to_value(u.arcsec) * xslitoff
+        x0asec, y0asec = self._xyoffconv(xslitoff, yslitoff)
 
-        if hasattr(yslitoff, 'unit'):
-            y0 = yslitoff.to_value(u.arcsec)
-        else:
-            y0 = self.msa_slit_height.to_value(u.arcsec) * yslitoff
-
-        nrs.options.update({'source_offset_x': x0, 'source_offset_y': y0})
+        nrs.options.update({'source_offset_x': x0asec, 'source_offset_y': y0asec})
         psffits = nrs.calc_psf(monochromatic=wavelength.to_value(u.meter), 
                                oversample=self.oversampling, 
                                fov_arcsec=self.fov_arcsec,
@@ -114,14 +135,21 @@ class NIRSpecPSF(PSFBase):
         psf_flux = psffits[whichext].data
         self.last_header = psffits[whichext].header
 
-        psfcen_x = x0
-        psfcen_y = y0
-
         ys, xs = np.indices(psf_flux.shape)
-        psf_x = (xs - (xs.shape[1]-1)/2 - psfcen_x)/self.oversampling
-        psf_y = (ys - (ys.shape[0]-1)/2 - psfcen_y)/self.oversampling
+        psf_x = (xs - (xs.shape[1]-1)/2 - x0asec/self.last_header['PIXELSCL'])/self.last_header['OVERSAMP']
+        psf_y = (ys - (ys.shape[0]-1)/2 - y0asec/self.last_header['PIXELSCL'])/self.last_header['OVERSAMP']
 
         return psf_x, psf_y, psf_flux
+
+    @property
+    def detector_pixelscale(self):
+        # the header comment for PIXELSCL says "Scale in arcsec/pix (after oversampling)"
+        return (1/(self.last_header['PIXELSCL']*self.last_header['OVERSAMP'])) << (u.pixel/u.arcsec)
+
+    @property
+    def oversampled_pixelscale(self):
+        # the header comment for PIXELSCL says "Scale in arcsec/pix (after oversampling)"
+        return (1/self.last_header['PIXELSCL']) << (u.pixel/u.arcsec)
 
     def make_psf_points(self, n, wavelength, whichext='OVERDIST', slit_fraction=1, pbar=True):
         psfxoffs = (np.random.rand(n)-0.5)*self.msa_slit_width*slit_fraction
@@ -218,6 +246,8 @@ class ComplexGaborLayer(GaborLayer):
 
 class PSFWIRE(eqx.Module):
     layers: list
+    outscale: float
+    outmin: float
 
     def __init__(self, n_in_coo,
                        hidden_size=256, 
@@ -226,6 +256,7 @@ class PSFWIRE(eqx.Module):
                        rkey=None,
                        complex=True,
                        w0=20, s0=10,
+                       outscale=1.0, outmin = 0,
                        trainable_activations=False):
         if rkey is None:
             rkey = jax.random.PRNGKey(0)
@@ -252,10 +283,13 @@ class PSFWIRE(eqx.Module):
         layers.append(final_activation)
 
         self.layers = layers
+        self.outscale = outscale
+        self.outmin = outmin
 
     def __call__(self, x):
         for layer in self.layers:
             x = layer(x)
+        x = x * self.outscale + self.outmin
         return x.squeeze()
 
 class CoordinateNormalizer:
@@ -292,8 +326,16 @@ class CoordinateNormalizer:
 
 class NIRSpecPSFINREmulator(PSFBase):
     def __init__(self, trained_model, coordinate_normalizer, xygrid, 
-                 normalize_flux=True, oversampling=4, fov=48):
+                 normalize_flux=True, oversampling=4, fov=48, 
+                 oversampled_pixelscale=None):
         super().__init__(oversampling=oversampling, fov=fov)
+        if isinstance(oversampled_pixelscale, u.Quantity): 
+            if oversampled_pixelscale.unit.is_equivalent(u.arcsec/u.pixel):
+                self.oversampled_pixelscale = (1/oversampled_pixelscale).to(u.pixel/u.arcsec)
+            else:
+                self.oversampled_pixelscale = oversampled_pixelscale.to(u.pixel/u.arcsec)
+        else:
+            self.oversampled_pixelscale = oversampled_pixelscale << (u.arcsec/u.pixel)
 
         self.trained_model = trained_model
 
@@ -353,7 +395,9 @@ class NIRSpecPSFINREmulator(PSFBase):
               ncycles, minlr, peaklr, warmup_fraction,
               rkey, xypx=None, 
               loss_meantologweight='progressive', loss_eps=0,
-              pbar=True, oversampling=4, fov=48, **inrkwargs):
+              pbar=True, oversampling=4, fov=48, 
+              oversampled_pixelscale=None,
+              **inrkwargs):
         if 'n_in_coo' in inrkwargs and inrkwargs['n_in_coo'] != 4:
             raise ValueError("n_in_coo should not be specified in inrkwargs")
         inrkwargs['n_in_coo'] = 4
@@ -420,11 +464,13 @@ class NIRSpecPSFINREmulator(PSFBase):
                 from tqdm.auto import tqdm
                 pbar = tqdm
             else:
+                f = None
                 try: 
                     f = float(pbar)
                 except:
                     pass # assume it failed and continue
-                pbar = lambda x: PrintFracPbar(x, printfrac=f)
+                if f is not None:
+                    pbar = lambda x: PrintFracPbar(x, printfrac=f)
         else:
             pbar = lambda x:x
 
@@ -449,7 +495,7 @@ class NIRSpecPSFINREmulator(PSFBase):
             if hasattr(pb, 'set_postfix'):
                 pb.set_postfix({"loss": losses[i]})
 
-        newobj = cls(model, xnorm, (xpx, ypx), oversampling=oversampling, fov=fov)
+        newobj = cls(model, xnorm, (xpx, ypx), oversampling=oversampling, fov=fov, oversampled_pixelscale=oversampled_pixelscale)
         newobj.training_parameters = {}
         for pnm in ['nepochs', 'batch_size', 'loss_meantologweight', 'loss_eps', 'ncycles', 'ntot', 'minlr', 'peaklr', 'warmup_fraction', 'rkey', 'xypx', 'oversampling', 'fov']:
             newobj.training_parameters[pnm] = locals()[pnm]
@@ -459,6 +505,13 @@ class NIRSpecPSFINREmulator(PSFBase):
             'learning_rates': lrs
         }
         return newobj, train_info
+    
+    @property
+    def detector_pixelscale(self):
+        if self.oversampled_pixelscale is None:
+            return None
+        else:
+            return self.oversampled_pixelscale / self.oversampling
 
 class PrintFracPbar:
     def __init__(self, wrapped, printfrac=.1, total=None):

@@ -14,6 +14,7 @@ import pickle
 import warnings
 from pathlib import Path
 from abc import ABC, abstractmethod
+from functools import cached_property
 
 import numpy as np
 
@@ -73,6 +74,14 @@ class SpectrumModelBase(ABC):
             if cache:
                 self._resample_cache[(teff, log, feh, meandisp)] = respec
             return respec
+
+    @cached_property
+    def dnu_hz(self):
+        nu = (self.wave_microns << u.micron).to_value(u.Hz, u.spectral())
+        dnu = np.convolve(nu, [-0.5, 0, 0.5], mode='same')
+        dnu[0] = dnu[1]
+        dnu[-1] = dnu[-2]
+        return dnu
 
 
 class PhoenixModelsDirect(SpectrumModelBase):

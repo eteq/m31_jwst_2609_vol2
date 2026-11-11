@@ -180,7 +180,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/ncurses-6.6-hdb14827_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/nlohmann_json-3.12.0-h54a6638_2.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/numexpr-2.14.2-py314h5b8e6f6_101.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/numpy-2.5.4-py314hd3a7d6b_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/numpy-2.4.6-py314h2b28147_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/onednn-3.14-threadpool_h2b436bf_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/onednn-cpu-threadpool-3.14-threadpool_h7c5aa05_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/openjpeg-2.5.4-heb1ab33_2.conda
@@ -482,8 +482,8 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/d5/2d/13a9a548f119b50afb3954abcd2d33a90b2a9c0c2d4e4c5bf74553121209/stsci_stimage-0.3.2-cp311-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/e0/1b/5e74289a1878e666bb4b65fe5805a04cafcac2aa5f519ef1ead67ef91c56/filelock-4.2.4-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e5/99/a3ad7718aec4322bc798b1a17b8f8861a79f4b3701d04ccc4abdf3234352/poppy-1.2.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/e8/73/db3468282daf81a550bb409ce2e0756e6b129464c7eee211ba117ba91925/stpsf-2.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e9/44/27e3cee3dcdb3b7bc09727b642bdbfcd098490ea77df04611db9060d7722/lxml-6.1.3-cp314-cp314-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl
+      - pypi: https://files.pythonhosted.org/packages/e9/69/357391e075f97b394cbcb8ca32cb701181cf154b5335f11923c7b07f01f9/stpsf-2.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/f2/58/bc8954bda5fcda97bd7c19be11b85f91973d67a706ed4a3aec33e7de22db/jaraco_context-6.1.2-py3-none-any.whl
   gpu:
     channels:
@@ -673,7 +673,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/ncurses-6.6-hdb14827_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/nlohmann_json-3.12.0-h54a6638_2.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/numexpr-2.14.2-py314h5b8e6f6_101.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/numpy-2.5.4-py314hd3a7d6b_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/numpy-2.4.6-py314h2b28147_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/onednn-3.14-threadpool_h2b436bf_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/onednn-cpu-threadpool-3.14-threadpool_h7c5aa05_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/openjpeg-2.5.4-heb1ab33_2.conda
@@ -994,8 +994,8 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/df/73/8934508d27efd9a930489059b980bc1e75336574be31bffb284a9e782fa7/numba_cuda-0.30.4-cp314-cp314-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/e0/1b/5e74289a1878e666bb4b65fe5805a04cafcac2aa5f519ef1ead67ef91c56/filelock-4.2.4-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e5/99/a3ad7718aec4322bc798b1a17b8f8861a79f4b3701d04ccc4abdf3234352/poppy-1.2.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/e8/73/db3468282daf81a550bb409ce2e0756e6b129464c7eee211ba117ba91925/stpsf-2.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e9/44/27e3cee3dcdb3b7bc09727b642bdbfcd098490ea77df04611db9060d7722/lxml-6.1.3-cp314-cp314-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl
+      - pypi: https://files.pythonhosted.org/packages/e9/69/357391e075f97b394cbcb8ca32cb701181cf154b5335f11923c7b07f01f9/stpsf-2.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/f2/58/bc8954bda5fcda97bd7c19be11b85f91973d67a706ed4a3aec33e7de22db/jaraco_context-6.1.2-py3-none-any.whl
 packages:
 - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
@@ -4062,29 +4062,29 @@ packages:
   run_exports: {}
   size: 222232
   timestamp: 1789120196356
-- conda: https://conda.anaconda.org/conda-forge/linux-64/numpy-2.5.4-py314hd3a7d6b_0.conda
-  sha256: 7533361a15ff1d4c1e7069b9410d32a602a6a9350d717a43731b07e3565a6689
-  md5: 533d72030f9dbe5f9a439c7f9673940b
+- conda: https://conda.anaconda.org/conda-forge/linux-64/numpy-2.4.6-py314h2b28147_0.conda
+  sha256: bc61ae892973751a6b0e6ecea57ed6d7053224bddcb007165d6ceb1d7344ad47
+  md5: f49b5f950379e0b97c35ca97682f7c6a
   depends:
   - python
-  - libgcc >=15
-  - libstdcxx >=15
+  - libstdcxx >=14
+  - libgcc >=14
   - __glibc >=2.17,<3.0.a0
   - liblapack >=3.9.0,<4.0a0
-  - libcblas >=3.9.0,<4.0a0
   - python_abi 3.14.* *_cp314
   - libblas >=3.9.0,<4.0a0
+  - libcblas >=3.9.0,<4.0a0
   constrains:
   - numpy-base <0a0
   license: BSD-3-Clause
   license_family: BSD
   purls:
-  - pkg:pypi/numpy?source=compressed-mapping
+  - pkg:pypi/numpy?source=hash-mapping
   run_exports:
     weak:
-    - numpy >=1.25,<3
-  size: 9406761
-  timestamp: 1791675316116
+    - numpy >=1.23,<3
+  size: 8928909
+  timestamp: 1779169198391
 - conda: https://conda.anaconda.org/conda-forge/linux-64/onednn-3.14-threadpool_h2b436bf_0.conda
   sha256: aa5fa56187dd8b5de5221ceead73f0e3f899b372d091052cd020cfd409825f7f
   md5: bf382924afba3554299b45b021481178
@@ -8059,7 +8059,7 @@ packages:
   license: Apache-2.0
   license_family: APACHE
   purls:
-  - pkg:pypi/websocket-client?source=hash-mapping
+  - pkg:pypi/websocket-client?source=compressed-mapping
   run_exports: {}
   size: 78254
   timestamp: 1788531123810
@@ -9287,30 +9287,6 @@ packages:
   - sphinx-issues ; extra == 'docs'
   - ipython ; extra == 'docs'
   requires_python: '>=3.12'
-- pypi: https://files.pythonhosted.org/packages/e8/73/db3468282daf81a550bb409ce2e0756e6b129464c7eee211ba117ba91925/stpsf-2.1.0-py3-none-any.whl
-  name: stpsf
-  version: 2.1.0
-  sha256: 5d6a70e8abf938d467d55aa75371fe5103ece839916625ccd45d8063b3de7224
-  requires_dist:
-  - numpy>=1.21.6
-  - scipy>=1.5.0
-  - matplotlib>=3.2.0
-  - astropy>=5.1.0
-  - photutils>=1.10.0
-  - poppy>=1.0.0
-  - pysiaf>=0.23.3
-  - synphot>=1.0.0
-  - astroquery>=0.4.6
-  - pytest ; extra == 'test'
-  - pytest-astropy ; extra == 'test'
-  - nbsphinx ; extra == 'docs'
-  - sphinx ; extra == 'docs'
-  - stsci-rtd-theme ; extra == 'docs'
-  - sphinx-astropy ; extra == 'docs'
-  - sphinx-automodapi ; extra == 'docs'
-  - sphinx-issues ; extra == 'docs'
-  - tomli ; python_full_version < '3.11' and extra == 'docs'
-  requires_python: '>=3.10'
 - pypi: https://files.pythonhosted.org/packages/e9/44/27e3cee3dcdb3b7bc09727b642bdbfcd098490ea77df04611db9060d7722/lxml-6.1.3-cp314-cp314-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl
   name: lxml
   version: 6.1.3
@@ -9321,6 +9297,31 @@ packages:
   - beautifulsoup4 ; extra == 'htmlsoup'
   - lxml-html-clean ; extra == 'html-clean'
   requires_python: '>=3.8'
+- pypi: https://files.pythonhosted.org/packages/e9/69/357391e075f97b394cbcb8ca32cb701181cf154b5335f11923c7b07f01f9/stpsf-2.3.0-py3-none-any.whl
+  name: stpsf
+  version: 2.3.0
+  sha256: 387c7b3a17aacb79a20f9cec8f26aa6dd2ca115475fb38bee7d8326bd80eceb4
+  requires_dist:
+  - astropy>=7.0
+  - astroquery>=0.4.8
+  - matplotlib>=3.10
+  - numpy>=2.2
+  - photutils>=2.0
+  - poppy>=1.2
+  - pysiaf>=0.24
+  - scipy>=1.15
+  - synphot>=1.5
+  - pytest>=9.0 ; extra == 'test'
+  - nbsphinx ; extra == 'docs'
+  - pandoc ; extra == 'docs'
+  - sphinx ; extra == 'docs'
+  - sphinx-astropy ; extra == 'docs'
+  - sphinx-automodapi ; extra == 'docs'
+  - sphinx-issues ; extra == 'docs'
+  - stsci-rtd-theme ; extra == 'docs'
+  - jwst ; extra == 'jwst'
+  - roman-datamodels ; extra == 'roman'
+  requires_python: '>=3.12'
 - pypi: https://files.pythonhosted.org/packages/f2/58/bc8954bda5fcda97bd7c19be11b85f91973d67a706ed4a3aec33e7de22db/jaraco_context-6.1.2-py3-none-any.whl
   name: jaraco-context
   version: 6.1.2

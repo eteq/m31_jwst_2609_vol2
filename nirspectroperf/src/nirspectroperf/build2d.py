@@ -120,7 +120,7 @@ def to_cuda_array_if_needed(arr, dtype=np.float32):
         return cuda.to_device(arr.astype(dtype))
 
 
-def scatter_flux(xspec, yspec, spectrum_fnu, 
+def scatter_flux(xspec, yspec, spectrum_fnudnu, 
                  psf_x, psf_y, psf_flux, 
                  oversampling, 
                  slittemplate, 
@@ -133,7 +133,7 @@ def scatter_flux(xspec, yspec, spectrum_fnu,
     import cupy as cp
     xspecc = to_cuda_array_if_needed(xspec)
     yspecc = to_cuda_array_if_needed(yspec)
-    fluxspecc = to_cuda_array_if_needed(spectrum_fnu)
+    fluxspecc = to_cuda_array_if_needed(spectrum_fnudnu)
 
     psf_xc = to_cuda_array_if_needed(psf_x)
     psf_yc = to_cuda_array_if_needed(psf_y)
