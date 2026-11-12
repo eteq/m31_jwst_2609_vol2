@@ -22,7 +22,7 @@ def scatter_flux_kernel(xspec, yspec, fluxspec,
 
     ``xspec`` and ``yspec`` are the x and y coordinates of the spectrum points.
     ``fluxspec`` is the flux of the spectrum points.
-    ``psf_x``, ``psf_y``, are the x and y coordinates of the psf pixels, in *detector* coordinates (i.e. not-oversampled)
+    ``psf_x``, ``psf_y``, are the x and y offset of the psf pixels from the PSF center, in *detector* coordinates (i.e. not-oversampled)
     ``psf_flux`` is the flux of the psf pixels. The usual assumption is that this sums to 1 (or to whatever fraction of the total flux is contained in the PSF array).
     ``startidx`` and ``nspec`` define the starting index and number of spectrum points influencing each pixel.
     ``outslitall`` is the output 2D slit image array.
