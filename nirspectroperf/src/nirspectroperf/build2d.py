@@ -23,9 +23,11 @@ def scatter_flux_kernel(xspec, yspec, fluxspec,
     ``xspec`` and ``yspec`` are the x and y coordinates of the spectrum points.
     ``fluxspec`` is the flux of the spectrum points.
     ``psf_x``, ``psf_y``, are the x and y offset of the psf pixels from the PSF center, in *detector* coordinates (i.e. not-oversampled)
+    ``psf_x``, ``psf_y``, and ``psf_flux`` are all indexed [x, y] (axis 0 is x, axis 1 is y).
     ``psf_flux`` is the flux of the psf pixels. The usual assumption is that this sums to 1 (or to whatever fraction of the total flux is contained in the PSF array).
     ``startidx`` and ``nspec`` define the starting index and number of spectrum points influencing each pixel.
-    ``outslitall`` is the output 2D slit image array.
+    ``outslitall`` is the output 2D slit image array, indexed [y, x, spectrum point]
+    like the detector images (unlike the PSF arrays).
     ``oversampling`` is the oversampling factor for the PSF.
     """
     
@@ -61,7 +63,7 @@ def scatter_flux_kernel(xspec, yspec, fluxspec,
     xupper = min(npsfx, xupper)
     xrng = xupper - xlower
 
-    npsfy = psf_x.shape[1]
+    npsfy = psf_y.shape[1]
     ylower = int(math.floor((y - ysi - 1/2)*oversampling - 1) + npsfy/2)
     ylower = max(0, ylower)
     yupper = int(math.ceil((y - ysi + 1/2)*oversampling + 2) + npsfy/2)

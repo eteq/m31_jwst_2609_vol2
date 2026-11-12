@@ -26,3 +26,9 @@ def test_nirspec_psf():
     assert isinstance(px, np.ndarray)
     assert isinstance(py, np.ndarray)
     assert psf.shape == px.shape == py.shape
+
+    # arrays are indexed [x, y]: psf_x varies only along axis 0, psf_y only along axis 1
+    assert np.all(np.diff(px, axis=0) > 0)
+    assert np.allclose(np.diff(px, axis=1), 0)
+    assert np.all(np.diff(py, axis=1) > 0)
+    assert np.allclose(np.diff(py, axis=0), 0)

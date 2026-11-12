@@ -36,7 +36,10 @@ class PSFBase(ABC):
     @abstractmethod
     def evaluate_psf(self, xslit, yslit, wavelength):
         """
-        should return psf_x, psf_y, psf_flux where psf_x/y are in native pixel coordinates
+        should return psf_x, psf_y, psf_flux where psf_x/y are in native pixel coordinates.
+
+        All three arrays use the (x, y) indexing convention: axis 0 is x and
+        axis 1 is y, i.e. ``psf_x`` varies along axis 0 and ``psf_y`` along axis 1.
         """
         pass
 
@@ -119,7 +122,7 @@ class NIRSpecPSF(PSFBase):
 
         returns a (psf_x, psf_y, psf_flux) where psf_x/y are in detector pixel
         coordinates relative to the source position in the slit (i.e., (0, 0) 
-        is the center of the source)
+        is the center of the source).  All arrays are indexed [x, y].
         """
         nrs = self.nirspec_psf
         
@@ -132,12 +135,13 @@ class NIRSpecPSF(PSFBase):
                                fov_pixels=self.fov_pixels,
                                display=False)
         
-        psf_flux = psffits[whichext].data
+        # FITS data are [y, x]; transpose to the package-wide [x, y] convention
+        psf_flux = psffits[whichext].data.T
         self.last_header = psffits[whichext].header
 
         xs, ys = np.indices(psf_flux.shape)
-        psf_x = (xs.T - (xs.shape[1]-1)/2 - x0asec/self.last_header['PIXELSCL'])/self.last_header['OVERSAMP']
-        psf_y = (ys.T - (ys.shape[0]-1)/2 - y0asec/self.last_header['PIXELSCL'])/self.last_header['OVERSAMP']
+        psf_x = (xs - (xs.shape[0]-1)/2 - x0asec/self.last_header['PIXELSCL'])/self.last_header['OVERSAMP']
+        psf_y = (ys - (ys.shape[1]-1)/2 - y0asec/self.last_header['PIXELSCL'])/self.last_header['OVERSAMP']
 
         return psf_x, psf_y, psf_flux
 
@@ -328,6 +332,10 @@ class CoordinateNormalizer:
 
 
 class NIRSpecPSFINREmulator(PSFBase):
+    """
+    PSF emulator.  ``xygrid`` and the evaluated PSF arrays are indexed [x, y]
+    (axis 0 is x, axis 1 is y), matching `NIRSpecPSF.evaluate_psf`.
+    """
     def __init__(self, trained_model, coordinate_normalizer, xygrid, 
                  normalize_flux=True, oversampling=4, fov=48, 
                  oversampled_pixelscale=None):
@@ -409,9 +417,12 @@ class NIRSpecPSFINREmulator(PSFBase):
               oversampled_pixelscale=None,
               **inrkwargs):
         """
-        If xypx is given, it should be for the *0 offset* PSF.  Otherwise (i.e. if None),
-        it will be generated assuming the PSF at 0 offset is centered at the middle of 
-        the pixel grid.
+        ``psfarrs`` has shape (npsf, nx, ny), i.e. each PSF is indexed [x, y]
+        (as returned by `NIRSpecPSF.make_psf_grid`/`make_psf_points`).
+
+        If xypx is given, it should be for the *0 offset* PSF, also indexed
+        [x, y].  Otherwise (i.e. if None), it will be generated assuming the PSF
+        at 0 offset is centered at the middle of the pixel grid.
         """
         if 'n_in_coo' in inrkwargs and inrkwargs['n_in_coo'] != 4:
             raise ValueError("n_in_coo should not be specified in inrkwargs")
