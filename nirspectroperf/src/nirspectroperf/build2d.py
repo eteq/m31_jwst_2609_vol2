@@ -52,19 +52,26 @@ def scatter_flux_kernel(xspec, yspec, fluxspec,
     xo = float32(xsi) - float32(x)
     yo = float32(ysi) - float32(y)
 
-    xlower = int(math.floor((x - xsi - 1/2)*oversampling - 1) + psf_x.shape[0]/2)
-    xupper = int(math.ceil((x - xsi + 1/2)*oversampling + 2) + psf_x.shape[0]/2)
+    # here we compute the lowest and highest pixel that can be influenced by the PSF.
+    # we also clamp the pixel range to be within the PSF array bounds just in case
+    npsfx = psf_x.shape[0]
+    xlower = int(math.floor((x - xsi - 1/2)*oversampling - 1) + npsfx/2)
+    xlower = max(0, xlower)
+    xupper = int(math.ceil((x - xsi + 1/2)*oversampling + 2) + npsfx/2)
+    xupper = min(npsfx, xupper)
     xrng = xupper - xlower
-    ylower = int(math.floor((y - ysi - 1/2)*oversampling - 1) + psf_x.shape[1]/2)
-    yupper = int(math.ceil((y - ysi + 1/2)*oversampling + 2) + psf_x.shape[1]/2)
+
+    npsfy = psf_x.shape[1]
+    ylower = int(math.floor((y - ysi - 1/2)*oversampling - 1) + npsfy/2)
+    ylower = max(0, ylower)
+    yupper = int(math.ceil((y - ysi + 1/2)*oversampling + 2) + npsfy/2)
+    yupper = min(npsfy, yupper)
     yrng = yupper - ylower
 
     for iraw in range(xrng):
         for jraw in range(yrng):
-            #i = xlower + iraw
             j = ylower + jraw
             i = xlower + (iraw + tidx) % xrng
-            #j = ylower + (jraw + tidx) % yrng
 
             
             xpi = xo + psf_x[i, j]
