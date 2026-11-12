@@ -94,12 +94,13 @@ def scatter_flux_kernel(xspec, yspec, fluxspec,
 
 
 @cuda.jit
-def compute_influence_kernel(xspec, yspec, startidx, nspec, maxpsf):
+def compute_influence_kernel(xspec, yspec, startidx, nspec, maxpsf, noncontig):
     x = cuda.blockIdx.x
     y = cuda.threadIdx.x
     maxpsfc = float32(maxpsf)
 
     startidxi = -1
+    lastidxi = -1
     count = 0
     for i, (xs, ys) in enumerate(zip(xspec, yspec)):
         if abs(float32(x) - xs) <= maxpsfc:
@@ -107,19 +108,32 @@ def compute_influence_kernel(xspec, yspec, startidx, nspec, maxpsf):
                 count += 1
                 if startidxi == -1:
                     startidxi = i
-    
+                lastidxi = i
+
     startidx[y, x] = startidxi
     nspec[y, x] = count
 
+    # scatter_flux_kernel assumes the influencing spectrum points are contiguous
+    # (startidx .. startidx+nspec-1).  Flag any pixel where that's not true.
+    # This could end up conflicting across threads, but  because writes only happen
+    # to set it to 1, there isn't a conflict
+    if count > 0 and lastidxi - startidxi + 1 != count:
+        noncontig[0] = 1
 
-def compute_influence(xspec, yspec, maxpsf, slittemplate):
+
+def compute_influence(xspec, yspec, maxpsf, slittemplate, check_contiguous=True):
     """
-    Computes where the spectrum influences the slit image, assuming a maximum 
-    PSF size of maxpsf. 
-    
+    Computes where the spectrum influences the slit image, assuming a maximum
+    PSF size of maxpsf.
+
     Returns two arrays, `startidx` and `nspec`, which are the starting index of the
     spectrum that influences each pixel, and the number of spectrum points
-    that influence each pixel, respectively. Both are device arays.
+    that influence each pixel, respectively. Both are device arrays.
+
+    If ``check_contiguous`` is True, raises a ValueError if the spectrum points
+    influencing any pixel are not a contiguous run of indices (which
+    `scatter_flux_kernel` assumes).  This requires a small device-to-host copy
+    and synchronization, so it can be turned off for performance if needed.
     """
     kernelspec_influence = (slittemplate.shape[1], slittemplate.shape[0])
 
@@ -128,8 +142,14 @@ def compute_influence(xspec, yspec, maxpsf, slittemplate):
 
     startidxc = cuda.device_array(slittemplate.shape, dtype=np.int32)
     nspecc = cuda.device_array(slittemplate.shape, dtype=np.int32)
+    noncontigc = cuda.to_device(np.zeros(1, dtype=np.int32))
 
-    compute_influence_kernel[kernelspec_influence](xspecc, yspecc, startidxc, nspecc, maxpsf)
+    compute_influence_kernel[kernelspec_influence](xspecc, yspecc, startidxc, nspecc, maxpsf, noncontigc)
+
+    if check_contiguous and noncontigc.copy_to_host()[0]:
+        raise ValueError("The spectrum points influencing at least one pixel are "
+                         "not contiguous in index, which scatter_flux assumes. "
+                         "This probably means the trace isn't monotonic")
 
     return startidxc, nspecc
 
@@ -146,9 +166,13 @@ def scatter_flux(xspec, yspec, spectrum_fnudnu,
                  slittemplate, 
                  sum_flux=True, 
                  ret_host_array=False,
-                 outslitall=None):
+                 outslitall=None,
+                 check_contiguous=True):
     """
     This function takes host-side arrays, and converts them into a form the GPU can use.
+
+    ``check_contiguous`` is passed to `compute_influence`; set it to False to
+    skip the (small) cost of verifying the contiguity assumption.
     """
     import cupy as cp
     xspecc = to_cuda_array_if_needed(xspec)
@@ -160,7 +184,8 @@ def scatter_flux(xspec, yspec, spectrum_fnudnu,
     psf_fluxc = to_cuda_array_if_needed(psf_flux)
 
     maxpsf = max(np.max(psf_x), np.max(psf_y)).astype(np.float32).ravel()[0]
-    startidxc, nspecc = compute_influence(xspecc, yspecc, float(maxpsf), slittemplate)
+    startidxc, nspecc = compute_influence(xspecc, yspecc, float(maxpsf), slittemplate,
+                                          check_contiguous=check_contiguous)
 
     longest_stretch = int(cp.array(nspecc, copy=False).max())
     longest_stretch32 = math.ceil(longest_stretch / 32) * 32   
