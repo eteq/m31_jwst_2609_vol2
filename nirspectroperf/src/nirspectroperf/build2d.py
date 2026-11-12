@@ -183,7 +183,11 @@ def scatter_flux(xspec, yspec, spectrum_fnudnu,
     psf_yc = to_cuda_array_if_needed(psf_y)
     psf_fluxc = to_cuda_array_if_needed(psf_flux)
 
-    maxpsf = max(np.max(psf_x), np.max(psf_y)).astype(np.float32).ravel()[0]
+    # A spectrum point influences a pixel if any PSF subpixel overlaps it.  That
+    # can happen out to the largest offset in the PSF on either side, plus half
+    # a detector pixel (the pixel's own half-width) plus half a subpixel (the
+    # subpixel's half-width).
+    maxpsf = max(float(np.max(np.abs(psf_x))), float(np.max(np.abs(psf_y)))) + 0.5 + 0.5/oversampling
     startidxc, nspecc = compute_influence(xspecc, yspecc, float(maxpsf), slittemplate,
                                           check_contiguous=check_contiguous)
 
