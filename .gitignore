@@ -15,3 +15,5 @@ dist
 # .model is an old naming scheme for some of the model files, although the templates should now output .hdf5
 *.model
 *.ipynb_bk
+# this is a place to dump experimentation data that is probably not needed but might be expensive to re-create locally if it turns out its useful after all
+experimentation/archived
