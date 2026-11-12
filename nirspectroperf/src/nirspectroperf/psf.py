@@ -135,9 +135,9 @@ class NIRSpecPSF(PSFBase):
         psf_flux = psffits[whichext].data
         self.last_header = psffits[whichext].header
 
-        ys, xs = np.indices(psf_flux.shape)
-        psf_x = (xs - (xs.shape[1]-1)/2 - x0asec/self.last_header['PIXELSCL'])/self.last_header['OVERSAMP']
-        psf_y = (ys - (ys.shape[0]-1)/2 - y0asec/self.last_header['PIXELSCL'])/self.last_header['OVERSAMP']
+        xs, ys = np.indices(psf_flux.shape)
+        psf_x = (xs.T - (xs.shape[1]-1)/2 - x0asec/self.last_header['PIXELSCL'])/self.last_header['OVERSAMP']
+        psf_y = (ys.T - (ys.shape[0]-1)/2 - y0asec/self.last_header['PIXELSCL'])/self.last_header['OVERSAMP']
 
         return psf_x, psf_y, psf_flux
 
@@ -163,10 +163,12 @@ class NIRSpecPSF(PSFBase):
 
         psfress = [self.evaluate_psf(x, y, wavelength, whichext)
                 for x, y in pbar(list(zip(psfxoffs, psfyoffs)))]
-        psfs = [p[2] for p in psfress]
-        xpx, ypx = psfress[0][:2]
         
-        return np.array(psfs), np.array(xpx), np.array(ypx), np.array(psfxoffs), np.array(psfyoffs)
+        psfs = [p[2] for p in psfress]
+        xpxs = [p[0] for p in psfress]
+        ypxs = [p[1] for p in psfress]
+        
+        return np.array(psfs), np.array(xpxs), np.array(ypxs), np.array(psfxoffs), np.array(psfyoffs)
 
     def make_psf_grid(self, n, wavelength, whichext='OVERDIST', slit_fraction=1, pbar=True):
         nperax = int(n**0.5)
@@ -196,9 +198,10 @@ class NIRSpecPSF(PSFBase):
                 t.update()
 
         psfs = [p[2] for p in psfress]
-        xpx, ypx = psfress[0][:2]
+        xpxs = [p[0] for p in psfress]
+        ypxs = [p[1] for p in psfress]
 
-        return np.array(psfs), np.array(xpx), np.array(ypx), np.array(xs), np.array(ys)
+        return np.array(psfs), np.array(xpxs), np.array(ypxs), np.array(xs), np.array(ys)
 
 
 class GaborLayer(eqx.Module):
@@ -369,7 +372,13 @@ class NIRSpecPSFINREmulator(PSFBase):
         if self._jitted_eval is None:
             self._jitted_eval = jax.jit(self._do_eval)
 
-        return self._xgrid, self._ygrid, self._jitted_eval(xslitoff, yslitoff, wavelength)
+        # might want to cache this for speed somehow but its probably way faster than the eval
+        x0asec, y0asec = self._xyoffconv(xslitoff, yslitoff)
+        dpxscale = self.detector_pixelscale.to_value(u.pixel/u.arcsec)
+        xg = self._xgrid - x0asec*dpxscale
+        yg = self._ygrid - y0asec*dpxscale
+
+        return xg, yg, self._jitted_eval(xslitoff, yslitoff, wavelength)
 
     def _do_eval(self, xslitoff, yslitoff, wavelength):
         # we currently ignore wavelength since the variation is basically nil
@@ -393,11 +402,17 @@ class NIRSpecPSFINREmulator(PSFBase):
     @classmethod
     def train(cls, psfarrs, psfxoffs, psfyoffs, batch_size, nepochs, 
               ncycles, minlr, peaklr, warmup_fraction,
-              rkey, xypx=None, 
+              rkey,
+              xypx=None,
               loss_meantologweight='progressive', loss_eps=0,
               pbar=True, oversampling=4, fov=48, 
               oversampled_pixelscale=None,
               **inrkwargs):
+        """
+        If xypx is given, it should be for the *0 offset* PSF.  Otherwise (i.e. if None),
+        it will be generated assuming the PSF at 0 offset is centered at the middle of 
+        the pixel grid.
+        """
         if 'n_in_coo' in inrkwargs and inrkwargs['n_in_coo'] != 4:
             raise ValueError("n_in_coo should not be specified in inrkwargs")
         inrkwargs['n_in_coo'] = 4
@@ -413,6 +428,8 @@ class NIRSpecPSFINREmulator(PSFBase):
 
         if xypx is None:
             xpx, ypx = jnp.indices(psfarrs.shape[1:])
+            xpx = (xpx - (xpx.shape[0]-1)/2) / oversampling
+            ypx = (ypx - (ypx.shape[1]-1)/2) / oversampling
         else:
             xpx, ypx = xypx
 
