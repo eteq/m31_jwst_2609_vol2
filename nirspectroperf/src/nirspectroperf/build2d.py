@@ -17,6 +17,17 @@ def scatter_flux_kernel(xspec, yspec, fluxspec,
                         startidx, nspec, 
                         outslitall,
                         oversampling):
+    """
+    This kernel computes the 2d flux by placing the PSF at a series of positions and spreading the flux out according to that psf.
+
+    ``xspec`` and ``yspec`` are the x and y coordinates of the spectrum points.
+    ``fluxspec`` is the flux of the spectrum points.
+    ``psf_x``, ``psf_y``, are the x and y coordinates of the psf pixels, in *detector* coordinates (i.e. not-oversampled)
+    ``psf_flux`` is the flux of the psf pixels. The usual assumption is that this sums to 1 (or to whatever fraction of the total flux is contained in the PSF array).
+    ``startidx`` and ``nspec`` define the starting index and number of spectrum points influencing each pixel.
+    ``outslitall`` is the output 2D slit image array.
+    ``oversampling`` is the oversampling factor for the PSF.
+    """
     
     pixel_slope = float32(-oversampling)
     pixel_intercept = float32((1+oversampling)/2)
