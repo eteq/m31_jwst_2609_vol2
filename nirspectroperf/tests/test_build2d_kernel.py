@@ -75,10 +75,11 @@ def _run_kernel(xspec, yspec, fluxspec, psf_x, psf_y, psf_flux, oversampling, sh
                                            (0.6, 0.45),
                                            (-0.6, -0.7),
                                            (1.1, -1.3)])
+@pytest.mark.filterwarnings('ignore') # why doesn't this work?: 'ignore::numba.core.errors.NumbaPerformanceWarning'
 def test_scatter_flux_matches_brute_force(xshift, yshift):
     """
-    The kernel only loops over a window of PSF subpixels near each output
-    pixel.  Check that the window never cuts off subpixels that overlap the
+    The kernel loops over a window of PSF subpixels near each output
+    pixel, checking that the window never cuts off subpixels that overlap the
     pixel, including when the PSF grid is shifted relative to the source (as
     happens for a source offset in the slit).
     """
