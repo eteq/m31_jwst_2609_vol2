@@ -123,6 +123,8 @@ class NIRSpecPSF(PSFBase):
         returns a (psf_x, psf_y, psf_flux) where psf_x/y are in detector pixel
         coordinates relative to the source position in the slit (i.e., (0, 0) 
         is the center of the source).  All arrays are indexed [x, y].
+
+        If `whichext` is None, return the whole fits file instead
         """
         nrs = self.nirspec_psf
         
@@ -136,14 +138,18 @@ class NIRSpecPSF(PSFBase):
                                display=False)
         
         # FITS data are [y, x]; transpose to the package-wide [x, y] convention
-        psf_flux = psffits[whichext].data.T
-        self.last_header = psffits[whichext].header
+        if whichext is None:
+            self.last_header = psffits[0].header
+            return psffits
+        else:
+            psf_flux = psffits[whichext].data.T
+            self.last_header = psffits[whichext].header
 
-        xs, ys = np.indices(psf_flux.shape)
-        psf_x = (xs - (xs.shape[0]-1)/2 - x0asec/self.last_header['PIXELSCL'])/self.last_header['OVERSAMP']
-        psf_y = (ys - (ys.shape[1]-1)/2 - y0asec/self.last_header['PIXELSCL'])/self.last_header['OVERSAMP']
+            xs, ys = np.indices(psf_flux.shape)
+            psf_x = (xs - (xs.shape[0]-1)/2 - x0asec/self.last_header['PIXELSCL'])/self.last_header['OVERSAMP']
+            psf_y = (ys - (ys.shape[1]-1)/2 - y0asec/self.last_header['PIXELSCL'])/self.last_header['OVERSAMP']
 
-        return psf_x, psf_y, psf_flux
+            return psf_x, psf_y, psf_flux
 
     @property
     def detector_pixelscale(self):
@@ -346,7 +352,7 @@ class NIRSpecPSFINREmulator(PSFBase):
             else:
                 self.oversampled_pixelscale = oversampled_pixelscale.to(u.pixel/u.arcsec)
         else:
-            self.oversampled_pixelscale = oversampled_pixelscale << (u.arcsec/u.pixel)
+            raise ValueError('oversampled_pixelscale must be an astropy Quantity')
 
         self.trained_model = trained_model
 
