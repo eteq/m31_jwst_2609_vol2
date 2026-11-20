@@ -54,20 +54,27 @@ def scatter_flux_kernel(xspec, yspec, fluxspec,
     xo = float32(xsi) - float32(x)
     yo = float32(ysi) - float32(y)
 
-    # here we compute the lowest and highest pixel that can be influenced by the PSF.
-    # we also clamp the pixel range to be within the PSF array bounds just in case
-    npsfx = psf_x.shape[0]
-    xlower = int(math.floor((x - xsi - 1/2)*oversampling - 1) + npsfx/2)
+    # Here we compute the range of PSF subpixel indices that can overlap this
+    # output pixel.  A subpixel overlaps if its offset is within the pixel
+    # half-width plus the subpixel half-width.  psf_x/psf_y are assumed to be
+    # linear in index with spacing 1/oversampling, but may be arbitrarily
+    # shifted (e.g. by the source offset in the slit), so the grid origin is
+    # read from the arrays rather than assumed to be centered.  
+
+    halfwidth_both = float32(0.5) + float32(0.5) / float32(oversampling)
+
+    x0 = psf_x[0, 0]
+    xlower = int(math.floor((x - xsi - halfwidth_both - x0)*oversampling))
     xlower = max(0, xlower)
-    xupper = int(math.ceil((x - xsi + 1/2)*oversampling + 2) + npsfx/2)
-    xupper = min(npsfx, xupper)
+    xupper = int(math.ceil((x - xsi + halfwidth_both - x0)*oversampling)) + 1
+    xupper = min(psf_x.shape[0], xupper)
     xrng = xupper - xlower
 
-    npsfy = psf_y.shape[1]
-    ylower = int(math.floor((y - ysi - 1/2)*oversampling - 1) + npsfy/2)
+    y0 = psf_y[0, 0]
+    ylower = int(math.floor((y - ysi - halfwidth_both - y0)*oversampling))
     ylower = max(0, ylower)
-    yupper = int(math.ceil((y - ysi + 1/2)*oversampling + 2) + npsfy/2)
-    yupper = min(npsfy, yupper)
+    yupper = int(math.ceil((y - ysi + halfwidth_both - y0)*oversampling)) + 1
+    yupper = min(psf_y.shape[1], yupper)
     yrng = yupper - ylower
 
     for iraw in range(xrng):
